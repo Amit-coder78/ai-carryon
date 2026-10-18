@@ -180,10 +180,10 @@ def _select_and_script_v2(candidates, posted, state=None):
     return {"status": "quality_rejected"}
 
 
-def run_gaming_cycle():
+def run_gaming_cycle(force=False):
     import traceback
     try:
-        return _run_gaming_cycle_inner()
+        return _run_gaming_cycle_inner(force=force)
     except Exception as e:
         print(f"GAMING PIPELINE CRASHED: {e}")
         traceback.print_exc()
@@ -235,7 +235,7 @@ def _increment_daily_cap():
         print(f"Daily cap increment failed: {e}")
 
 
-def _run_gaming_cycle_inner():
+def _run_gaming_cycle_inner(force=False):
     from datetime import datetime, timezone
 
     from agents_gaming.trending_agent import get_all_topics
@@ -262,7 +262,9 @@ def _run_gaming_cycle_inner():
     from agents.run_state import RunState
     state = RunState.open("gaming", gaming_db.get_meta, gaming_db.set_meta)
 
-    if state.resumed:
+    if force:
+        print("Adaptive scheduler: BYPASSED (forced run from dashboard)")
+    elif state.resumed:
         print("Adaptive scheduler: BYPASSED (finishing a run that stopped earlier)")
     else:
         upload_ok, upload_reason = should_upload_now_gaming()

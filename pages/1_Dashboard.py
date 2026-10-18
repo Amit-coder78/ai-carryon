@@ -193,6 +193,108 @@ def show_analytics():
             c5.markdown(f"📅 {v['published']}")
         st.divider()
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_channel_data(key, _get_stats, _get_videos):
+    """5-min cache so idle tabs don't call the YouTube API on every rerun (errors are not cached)."""
+    return _get_stats(), _get_videos(20)
+
+
+def render_channel_analytics(key, label, emoji, get_stats, get_videos, track_fn, token_hint, peak_label):
+    """Shared analytics view used by Hindi and Bhakti (same layout as English/Cricket/Gaming)."""
+    import pandas as pd
+    st.title(f"📊 {label} Channel Analytics")
+    st.caption(f"Live stats pulled from the {label.lower()} channel's own YouTube credentials, and snapshot history from the shared database.")
+
+    col_refresh, col_track = st.columns([1, 2])
+    with col_refresh:
+        if st.button("🔄 Refresh", key=f"{key}_analytics_refresh"):
+            _cached_channel_data.clear()
+            st.rerun()
+    with col_track:
+        if st.button("📸 Track views now", key=f"{key}_track_now",
+                     help=f"Manually pull current view counts for {label.lower()} videos into the DB — normally happens automatically ~hourly."):
+            with st.spinner("Fetching current view counts from YouTube..."):
+                try:
+                    tracked = track_fn()
+                    _cached_channel_data.clear()
+                    st.success(f"✅ Tracked {len(tracked)} {label.lower()} video(s)")
+                except Exception as e:
+                    st.error(f"Tracking failed: {e}")
+
+    st.divider()
+
+    with st.spinner(f"Fetching {label.lower()} channel data..."):
+        try:
+            ch_stats, ch_videos = _cached_channel_data(key, get_stats, get_videos)
+            fetch_error = None
+        except Exception as e:
+            ch_stats, ch_videos, fetch_error = None, [], str(e)
+
+    if fetch_error:
+        st.error(f"Couldn't reach the {label.lower()} channel's YouTube API: {fetch_error}")
+        st.caption(token_hint)
+    else:
+        st.subheader("📡 Channel Overview")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("👤 Subscribers", f"{ch_stats['subscribers']:,}")
+        m2.metric("👁️ Total Views", f"{ch_stats['total_views']:,}")
+        m3.metric("🎬 Videos", f"{ch_stats['video_count']:,}")
+        if ch_videos:
+            m4.metric("📈 Avg Views", f"{sum(v['views'] for v in ch_videos) // len(ch_videos):,}")
+
+        st.divider()
+
+        if not ch_videos:
+            st.info(f"No {label.lower()} videos found yet.")
+        else:
+            st.subheader("🏆 Top Videos by Views")
+            df = pd.DataFrame(ch_videos)
+            df["short_title"] = df["title"].str[:30] + "..."
+            st.bar_chart(df.set_index("short_title")["views"])
+
+            st.divider()
+            st.subheader(f"📋 All {label} Videos")
+            for v in ch_videos:
+                with st.container():
+                    vc1, vc2, vc3, vc4, vc5 = st.columns([4, 1, 1, 1, 1])
+                    vc1.markdown(f"[{v['title']}]({v['url']})")
+                    vc2.markdown(f"👁️ **{v['views']:,}**")
+                    vc3.markdown(f"👍 {v['likes']:,}")
+                    vc4.markdown(f"💬 {v['comments']:,}")
+                    vc5.markdown(f"📅 {v['published']}")
+                st.divider()
+
+    st.caption(f"For hour-by-hour peak upload windows, see the **Peak Hours** and **Schedule** pages in the sidebar — select \"{peak_label}\" there. "
+               "Title experiments are on **A/B Titles**, competitor benchmarks on **Comparison**.")
+
+
+
+def render_spy_rows(key, items, button_label=None, on_click=None):
+    """Shared Trending Spy row layout used by all five channels.
+    items: list of dicts with title, url (optional), source, views, note."""
+    if not items:
+        st.warning("No trending topics found right now.")
+        return
+    for i, t in enumerate(items):
+        with st.container():
+            c1, c2, c3, c4, c5 = st.columns([4, 2, 1, 2, 2])
+            title = t.get("title", "")
+            c1.markdown(f"[{title}]({t['url']})" if t.get("url") else f"**{title}**")
+            c2.markdown(f"📺 {t.get('source', '')}")
+            c3.markdown(f"👁️ {t['views']:,}" if isinstance(t.get("views"), int) else "")
+            c4.markdown(f"🔥 {str(t.get('note', ''))[:30]}")
+            if button_label and on_click:
+                if c5.button(button_label, key=f"{key}_spy_{i}"):
+                    on_click(t)
+        st.divider()
+
+
+def channel_nav(key, options, default=None):
+    """In-tab navigation (replaces the old sidebar selectboxes, which all
+    showed at once and collided across channels)."""
+    return st.radio("📂 Navigation", options, horizontal=True, key=f"{key}_nav",
+                    index=options.index(default) if default in options else 0)
+
 # ── Password protection ──────────────────────────────────────────
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -213,17 +315,16 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # ── Main Tabs ────────────────────────────────────────────────────
-english_tab, hindi_tab, cricket_tab, gaming_tab = st.tabs(["🇬🇧 English Channel", "🇮🇳 Hindi Channel", "🏏 Cricket Channel", "🎮 Gaming Channel"])
+english_tab, hindi_tab, cricket_tab, gaming_tab, bhakti_tab = st.tabs(["🇬🇧 English Channel", "🇮🇳 Hindi Channel", "🏏 Cricket Channel", "🎮 Gaming Channel", "🕉️ Bhakti Channel"])
 
 # ════════════════════════════════════════════════════════════════
 # ENGLISH CHANNEL
 # ════════════════════════════════════════════════════════════════
 with english_tab:
-    page = st.sidebar.selectbox("📂 Navigation", ["🎬 Generate Video", "📊 Analytics", "🕵️ Trending Spy"])
-
     if st.session_state.get("go_generate"):
         st.session_state["go_generate"] = False
-        page = "🎬 Generate Video"
+        st.session_state["english_nav"] = "🎬 Generate Video"
+    page = channel_nav("english", ["🎬 Generate Video", "📊 Analytics", "🕵️ Trending Spy"])
 
     if page == "🕵️ Trending Spy":
         st.title("🕵️ Trending Spy")
@@ -233,8 +334,7 @@ with english_tab:
             topics = get_trending_topics()
         if not topics:
             st.warning("No topics found.")
-            st.stop()
-        for t in topics:
+        for t in topics or []:
             with st.container():
                 c1, c2, c3, c4, c5 = st.columns([4, 1, 1, 1, 2])
                 c1.markdown(f"[{t['title']}]({t['url']})")
@@ -500,23 +600,11 @@ with english_tab:
 # HINDI CHANNEL
 # ════════════════════════════════════════════════════════════════
 with hindi_tab:
-    # Handle redirect from Banao button
+    # Handle redirect from Banao button (must set widget state before the widget exists)
     if st.session_state.get("hindi_nav_override"):
-        st.session_state["hindi_page_current"] = st.session_state["hindi_nav_override"]
+        st.session_state["hindi_nav_nav"] = st.session_state["hindi_nav_override"]
         st.session_state["hindi_nav_override"] = None
-
-    hindi_nav_options = ["🎬 Video Banao", "📊 Analytics", "🕵️ Trending Spy"]
-    current_page = st.session_state.get("hindi_page_current", "🎬 Video Banao")
-    hindi_nav_default = hindi_nav_options.index(current_page) if current_page in hindi_nav_options else 0
-
-    hindi_page = st.sidebar.selectbox(
-        "📂 Hindi Navigation",
-        hindi_nav_options,
-        index=hindi_nav_default,
-        key="hindi_nav"
-    )
-    # Update current page on manual selection
-    st.session_state["hindi_page_current"] = hindi_page
+    hindi_page = channel_nav("hindi_nav", ["🎬 Video Banao", "📊 Analytics", "🕵️ Trending Spy"])
 
     # ── Trending Spy ─────────────────────────────────────────────
     if hindi_page == "🕵️ Trending Spy":
@@ -550,8 +638,14 @@ with hindi_tab:
 
     # ── Analytics ────────────────────────────────────────────────
     elif hindi_page == "📊 Analytics":
-        st.title("📊 Hindi Channel Analytics")
-        st.info("Hindi channel analytics coming soon! Railway deploy ke baad available hoga.")
+        from agents_hindi.analytics_agent import get_channel_stats as _hi_stats, get_recent_videos as _hi_videos
+        from agents_hindi.view_tracker_agent import track_views_hindi as _hi_track
+        render_channel_analytics(
+            key="hindi", label="Hindi", emoji="🇮🇳",
+            get_stats=_hi_stats, get_videos=_hi_videos, track_fn=_hi_track,
+            token_hint="Check that the Hindi token (HINDI_TOKEN_JSON) is set and includes the youtube.readonly scope.",
+            peak_label="Hindi AI CarryON",
+        )
 
     # ── Generate Video ───────────────────────────────────────────
     else:
@@ -799,94 +893,196 @@ with hindi_tab:
 # runs on GitHub Actions cron via scheduler_gaming.py)
 # ════════════════════════════════════════════════════════════════
 with gaming_tab:
-    st.title("🎮 AI CarryON - Gaming Channel Analytics")
-    st.caption("Live stats pulled from the gaming channel's own YouTube credentials, and snapshot history from its own database.")
+    gaming_page = channel_nav("gaming", ["🎬 Run Pipeline", "📊 Analytics", "🕵️ Trending Spy"])
 
-    col_refresh, col_track = st.columns([1, 2])
-    with col_refresh:
-        if st.button("🔄 Refresh", key="gaming_analytics_refresh"):
-            st.rerun()
-    with col_track:
-        if st.button("📸 Track views now", key="gaming_track_now",
-                     help="Manually pull current view counts for gaming videos into the DB — normally happens automatically ~hourly from scheduler_gaming.py."):
-            with st.spinner("Fetching current view counts from YouTube..."):
-                try:
-                    from agents_gaming.view_tracker_agent import track_views_gaming
-                    tracked = track_views_gaming()
-                    st.success(f"✅ Tracked {len(tracked)} gaming video(s)")
-                except Exception as e:
-                    st.error(f"Tracking failed: {e}")
+    # ── Trending Spy (Twitch clips) ──────────────────────────────
+    if gaming_page == "🕵️ Trending Spy":
+        st.title("🕵️ Gaming Trending Spy")
+        st.markdown("Top Twitch clips from followed streamers and trending game categories (last 24h) — the same pool the scheduler picks from.")
+        with st.spinner("Fetching trending Twitch clips..."):
+            try:
+                from agents_gaming.trending_agent import get_all_topics as _gm_topics
+                from agents_gaming.clip_finder import rank_clips as _gm_rank
+                _clips = _gm_rank(_gm_topics())[:15]
+            except Exception as e:
+                st.error(f"Couldn't fetch Twitch clips: {e}")
+                _clips = []
+        render_spy_rows("gaming", [
+            {"title": c.get("title", ""), "url": c.get("url"),
+             "source": c.get("broadcaster_name") or c.get("_source_streamer") or c.get("_source_game", ""),
+             "views": int(c.get("view_count", 0) or 0),
+             "note": c.get("_source_game") or c.get("_topic_type", "")}
+            for c in _clips
+        ])
 
-    st.divider()
-
-    with st.spinner("Fetching gaming channel data..."):
+    # ── Analytics ────────────────────────────────────────────────
+    elif gaming_page == "📊 Analytics":
+        from agents_gaming.analytics_agent import get_channel_stats as _gm_stats, get_recent_videos as _gm_videos
+        from agents_gaming.view_tracker_agent import track_views_gaming as _gm_track
+        render_channel_analytics(
+            key="gaming", label="Gaming", emoji="🎮",
+            get_stats=_gm_stats, get_videos=_gm_videos, track_fn=_gm_track,
+            token_hint="Check that YOUTUBE_GAMING_TOKEN_B64 is set and has the youtube.readonly scope "
+                       "(re-run generate_gaming_token.py if the token predates that scope).",
+            peak_label="Gaming AI CarryON",
+        )
+        st.subheader("🕐 Clip Post History")
         try:
-            from agents_gaming.analytics_agent import get_channel_stats, get_recent_videos
-            gaming_stats = get_channel_stats()
-            gaming_videos = get_recent_videos(20)
-            gaming_fetch_error = None
+            from agents_gaming.database import db as _gdb, db_init_error as _gdb_err
+            if _gdb is None:
+                st.info(f"Clip history unavailable here: {_gdb_err}")
+            else:
+                st.metric("Clips posted (all-time)", len(_gdb.get_all_posted_clip_ids()))
         except Exception as e:
-            gaming_stats, gaming_videos = None, []
-            gaming_fetch_error = str(e)
+            st.info(f"Clip history unavailable: {e}")
 
-    if gaming_fetch_error:
-        st.error(f"Couldn't reach the gaming channel's YouTube API: {gaming_fetch_error}")
-        st.caption("Check that YOUTUBE_GAMING_TOKEN_B64 is set for this environment and has the youtube.readonly scope "
-                   "(re-run generate_gaming_token.py if the token predates that scope).")
+    # ── Run Pipeline ─────────────────────────────────────────────
     else:
-        st.subheader("📡 Channel Overview")
-        g1, g2, g3, g4 = st.columns(4)
-        g1.metric("👤 Subscribers", f"{gaming_stats['subscribers']:,}")
-        g2.metric("👁️ Total Views", f"{gaming_stats['total_views']:,}")
-        g3.metric("🎬 Videos", f"{gaming_stats['video_count']:,}")
-        if gaming_videos:
-            avg_views = sum(v["views"] for v in gaming_videos) // len(gaming_videos)
-            g4.metric("📈 Avg Views", f"{avg_views:,}")
+        st.title("🎮 AI CarryON - Gaming Channel")
+        st.markdown("Finds a trending Twitch clip, analyses the moment, writes commentary, renders a Short and uploads it. "
+                    "Runs automatically from GitHub Actions via scheduler_gaming.py.")
+        try:
+            from agents_gaming.database import db as _gdb2
+            _gm_posted = len(_gdb2.get_all_posted_clip_ids()) if _gdb2 is not None else None
+        except Exception:
+            _gm_posted = None
+        _gm_today = None
+        try:
+            from scheduler_gaming import _check_daily_cap as _gm_cap
+            _gm_today = _gm_cap()
+        except Exception:
+            pass
+        g1, g2 = st.columns(2)
+        g1.metric("Uploaded today (UTC)", _gm_today if _gm_today is not None else "—")
+        g2.metric("Clips posted (all-time)", _gm_posted if _gm_posted is not None else "—")
+        st.divider()
+        st.markdown("**Quick mode — run one full cycle now**")
+        st.caption("Runs the same cycle the scheduler fires. This **publishes to the live Gaming YouTube channel** "
+                   "and ignores the adaptive-hour check (the daily cap still applies).")
+        _gm_confirm = st.checkbox("I understand this will upload a real video now", key="gaming_confirm_run")
+        if st.button("🔥 Generate + Upload Gaming Video", type="primary", key="gaming_run_btn", disabled=not _gm_confirm):
+            with st.spinner("Running full Gaming pipeline... this can take a few minutes"):
+                try:
+                    from scheduler_gaming import run_gaming_cycle
+                    _res = run_gaming_cycle(force=True)
+                    if _res.get("status") == "uploaded":
+                        st.success(f"✅ Uploaded: {_res.get('title')} — {_res.get('video_url')}")
+                    else:
+                        st.warning(f"Pipeline finished without an upload: {_res}")
+                except Exception as e:
+                    st.error(f"Pipeline error: {e}")
+        _gm_log = "output/scheduler_gaming_log.txt"
+        if os.path.exists(_gm_log):
+            with st.expander("📜 Latest scheduler log"):
+                st.code("".join(open(_gm_log, encoding="utf-8", errors="ignore").readlines()[-40:]), language="text")
+
+# ════════════════════════════════════════════════════════════════
+# BHAKTI CHANNEL (fully automated — devotional topics -> Pexels footage +
+# bhajan music -> Shorts -> YouTube, runs on GitHub Actions via scheduler_bhakti.py)
+# ════════════════════════════════════════════════════════════════
+with bhakti_tab:
+    bhakti_page = channel_nav("bhakti", ["🎬 Run Pipeline", "📊 Analytics", "🕵️ Trending Spy"])
+
+    # ── Trending Spy (devotional topics) ─────────────────────────
+    if bhakti_page == "🕵️ Trending Spy":
+        st.title("🕉️ Bhakti Trending Spy")
+        st.markdown("Devotional topic pool, with a live check for festival/devotional content trending in India right now. "
+                    "Topics already used or uploaded are marked.")
+        try:
+            from agents_bhakti import trending_agent as _bh_ta
+            _recent = _bh_ta._load_recent() + _bh_ta._load_uploaded_titles()
+            _items = [{"title": t, "source": "Topic pool",
+                       "note": "✅ used" if _bh_ta._is_repeat(t, _recent) else "🆕 available"}
+                      for t in _bh_ta.TOPIC_POOL]
+            _items.sort(key=lambda x: x["note"].startswith("✅"))
+            _live = None
+            if st.button("🔎 Check live devotional trend now", key="bhakti_live_trend_btn"):
+                with st.spinner("Checking YouTube trending (IN)..."):
+                    _live = _bh_ta._fetch_live_devotional_trend("IN", _recent)
+                if _live:
+                    st.success(f"🔥 Live trend: {_live}")
+                else:
+                    st.info("No devotional topic trending live right now.")
+            render_spy_rows("bhakti", _items)
+        except Exception as e:
+            st.error(f"Couldn't load Bhakti topics: {e}")
+
+    # ── Analytics ────────────────────────────────────────────────
+    elif bhakti_page == "📊 Analytics":
+        from agents_bhakti.analytics_agent import get_channel_stats as _bh_stats, get_recent_videos as _bh_videos
+        from agents_bhakti.view_tracker_agent import track_views_bhakti as _bh_track
+        render_channel_analytics(
+            key="bhakti", label="Bhakti", emoji="🕉️",
+            get_stats=_bh_stats, get_videos=_bh_videos, track_fn=_bh_track,
+            token_hint="Check that BHAKTI_TOKEN_JSON is set and includes youtube.upload, youtube.readonly and youtube.force-ssl "
+                       "(re-run generate_bhakti_token.py if the token predates those scopes).",
+            peak_label="Bhakti AI CarryON",
+        )
+
+    # ── Run Pipeline ─────────────────────────────────────────────
+    else:
+        st.title("🕉️ AI CarryON - Bhakti Channel")
+        st.markdown("Hindi devotional Shorts: mythological stories, mantra meanings and festival significance — "
+                    "stock temple/diya/aarti footage with a bhajan-style track. Runs automatically from GitHub Actions.")
+
+        _bh_mode = os.getenv("BHAKTI_MODE", "narrated")
+        _bh_target = os.getenv("BHAKTI_VIDEOS_PER_DAY", "6")
+        try:
+            from scheduler_bhakti import get_posted_count_today as _bh_posted_today
+            _bh_count = _bh_posted_today()
+        except Exception as e:
+            _bh_count = None
+            st.info(f"Post history unavailable here: {e}")
+
+        b1, b2, b3 = st.columns(3)
+        b1.metric("Uploaded in last 24h", _bh_count if _bh_count is not None else "—")
+        b2.metric("Daily target", _bh_target)
+        b3.metric("Mode", _bh_mode)
 
         st.divider()
+        st.markdown("**Quick mode — run one full cycle now**")
+        st.caption("Runs the same pipeline the scheduler fires (topic → saturation → comparison → research → script → "
+                   "A/B title → SEO → voice/music → render → upload). This **publishes to the live Bhakti YouTube channel** "
+                   "and ignores the adaptive-hour check.")
+        _bh_confirm = st.checkbox("I understand this will upload a real video now", key="bhakti_confirm_run")
+        if st.button("🔥 Generate + Upload Bhakti Video", type="primary", key="bhakti_run_btn", disabled=not _bh_confirm):
+            with st.spinner("Running full Bhakti pipeline... this can take a few minutes"):
+                try:
+                    from scheduler_bhakti import generate_and_upload_bhakti
+                    generate_and_upload_bhakti(force=True)
+                    st.success("✅ Pipeline finished — check the Analytics tab or the scheduler log for the result.")
+                except Exception as e:
+                    st.error(f"Pipeline error: {e}")
 
-        if not gaming_videos:
-            st.info("No gaming videos found yet.")
-        else:
-            st.subheader("🏆 Top Videos by Views")
-            import pandas as pd
-            df = pd.DataFrame(gaming_videos)
-            df["short_title"] = df["title"].str[:30] + "..."
-            st.bar_chart(df.set_index("short_title")["views"])
-
-            st.divider()
-            st.subheader("📋 All Gaming Videos")
-            for v in gaming_videos:
-                with st.container():
-                    vc1, vc2, vc3, vc4, vc5 = st.columns([4, 1, 1, 1, 1])
-                    vc1.markdown(f"[{v['title']}]({v['url']})")
-                    vc2.markdown(f"👁️ **{v['views']:,}**")
-                    vc3.markdown(f"👍 {v['likes']:,}")
-                    vc4.markdown(f"💬 {v['comments']:,}")
-                    vc5.markdown(f"📅 {v['published']}")
-                st.divider()
-
-    st.divider()
-    st.subheader("🕐 Clip Post History")
-    try:
-        from agents_gaming.database import db as _gdb, db_init_error as _gdb_err
-        if _gdb is None:
-            st.info(f"Clip history unavailable here: {_gdb_err}")
-        else:
-            posted_ids = _gdb.get_all_posted_clip_ids()
-            st.metric("Clips posted (all-time)", len(posted_ids))
-    except Exception as e:
-        st.info(f"Clip history unavailable: {e}")
-
-    st.caption("For hour-by-hour peak upload windows, see the **Peak Hours** and **Schedule** pages in the sidebar — select \"Gaming AI CarryON\" there.")
+        _bh_log = "output/scheduler_bhakti_log.txt"
+        if os.path.exists(_bh_log):
+            with st.expander("📜 Latest scheduler log"):
+                st.code("".join(open(_bh_log).readlines()[-40:]), language="text")
 
 # ════════════════════════════════════════════════════════════════
 # CRICKET CHANNEL (fully automated — same pipeline as Render)
 # ════════════════════════════════════════════════════════════════
 with cricket_tab:
-    cricket_page = st.sidebar.selectbox(
-        "📂 Cricket Navigation", ["🎬 Generate + Upload", "📊 Analytics"], key="cricket_nav"
-    )
+    cricket_page = channel_nav("cricket", ["🎬 Generate + Upload", "📊 Analytics", "🕵️ Trending Spy"])
+
+if cricket_page == "🕵️ Trending Spy":
+    with cricket_tab:
+        st.title("🕵️ Cricket Trending Spy")
+        st.markdown("Breaking news, live, upcoming and recently finished Indian cricket matches — the same pool the scheduler picks from.")
+        with st.spinner("Fetching cricket topics..."):
+            try:
+                from agents_cricket.trending_agent import get_all_topics as _ck_topics
+                _ck = _ck_topics(limit=10)
+            except Exception as e:
+                st.error(f"Couldn't fetch cricket topics: {e}")
+                _ck = []
+        render_spy_rows("cricket", [
+            {"title": t.get("name") or t.get("title", ""), "url": t.get("link") or t.get("url"),
+             "source": t.get("source") or t.get("series") or "CricAPI",
+             "note": t.get("topic_type", "")}
+            for t in _ck
+        ])
+    st.stop()
 
 if cricket_page == "📊 Analytics":
     with cricket_tab:
