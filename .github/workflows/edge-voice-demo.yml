@@ -1,0 +1,36 @@
+name: Edge Voice Demo
+
+# Manual only. Renders the 5 Hindi edge-tts presets on GitHub's runners and
+# uploads them as a downloadable artifact (Actions run page -> Artifacts ->
+# edge-voice-samples). The run goes RED if every voice fails, which also tells
+# you whether edge-tts works from GitHub's network at all.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install edge-tts
+        run: pip install -U edge-tts
+
+      - name: Render voice samples
+        run: python agents/edge_voice_demo.py
+
+      - name: Upload samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-voice-samples
+          path: output/voice_samples/
+          if-no-files-found: warn

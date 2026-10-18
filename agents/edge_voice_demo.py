@@ -48,13 +48,16 @@ async def _list_hindi():
 
 
 async def _render(label, voice, rate, pitch, text, out_dir):
+    """Returns True on success. A voice can be unavailable or reject Hindi text."""
     import edge_tts
     path = os.path.join(out_dir, f"{label}.mp3")
     try:
         await edge_tts.Communicate(text, voice, rate=rate, pitch=pitch).save(path)
         print(f"ok    {label:24} {voice}  rate={rate} pitch={pitch}  -> {path}")
-    except Exception as e:  # a voice can be unavailable or reject Hindi text
-        print(f"FAIL  {label:24} {voice}: {e}")
+        return True
+    except Exception as e:
+        print(f"FAIL  {label:24} {voice}: {str(e)[:120]}")
+        return False
 
 
 async def _main(args):
@@ -63,10 +66,16 @@ async def _main(args):
         return
     out_dir = "output/voice_samples"
     os.makedirs(out_dir, exist_ok=True)
+    import importlib.metadata as md
+    print(f"edge-tts {md.version('edge-tts')}")
     presets = PRESETS + (EXPERIMENTAL if args.experimental else [])
+    ok = 0
     for label, voice, rate, pitch in presets:
-        await _render(label, voice, rate, pitch, args.text, out_dir)
-    print("\nListen to the files, then set <CHANNEL>_EDGE_VOICE / _RATE / _PITCH as repo variables.")
+        ok += await _render(label, voice, rate, pitch, args.text, out_dir)
+    print(f"\n{ok}/{len(presets)} voices rendered.")
+    if ok == 0:
+        raise SystemExit(1)  # every voice failed (e.g. HTTP 403 from Microsoft)
+    print("Listen to the files, then set <CHANNEL>_EDGE_VOICE / _RATE / _PITCH as repo variables.")
 
 
 if __name__ == "__main__":
