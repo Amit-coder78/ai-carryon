@@ -5,9 +5,9 @@ Each channel workflow sets, for example:
     GROQ_API_KEY         = this channel's own key   (used normally)
     GROQ_API_KEY_SHARED  = the old shared key       (used only when needed)
 
-install() wraps the HTTP layer (httpx for Groq/Gemini SDKs, requests for Pexels
+install() wraps the HTTP layer (httpx for Groq/Gemini/Sarvam SDKs, requests for Pexels
 and raw Gemini calls). If a call to api.groq.com / generativelanguage.googleapis.com /
-api.pexels.com comes back 429 (rate limit) or 401/403 (bad/revoked key), the same
+api.pexels.com / api.sarvam.ai comes back 429 (rate limit) or 401/403 (bad/revoked key), the same
 request is retried once with the shared key. No call site needs to change.
 
 - 429  -> keep using the shared key for COOLDOWN_429_SECONDS, then try personal again.
@@ -26,6 +26,7 @@ PROVIDERS = {
     "groq": ("api.groq.com", "GROQ_API_KEY", "GROQ_API_KEY_SHARED"),
     "gemini": ("generativelanguage.googleapis.com", "GEMINI_API_KEY", "GEMINI_API_KEY_SHARED"),
     "pexels": ("api.pexels.com", "PEXELS_API_KEY", "PEXELS_API_KEY_SHARED"),
+    "sarvam": ("api.sarvam.ai", "SARVAM_API_KEY", "SARVAM_API_KEY_SHARED"),
 }
 HOST_TO_PROVIDER = {v[0]: k for k, v in PROVIDERS.items()}
 
@@ -97,6 +98,8 @@ def _apply_shared(provider, headers, url):
         headers[lower.get("authorization", "Authorization")] = f"Bearer {shared}"
     elif provider == "pexels":
         headers[lower.get("authorization", "Authorization")] = shared
+    elif provider == "sarvam":
+        headers[lower.get("api-subscription-key", "api-subscription-key")] = shared
     else:  # gemini: key may travel in a header or in ?key=
         if "x-goog-api-key" in lower:
             headers[lower["x-goog-api-key"]] = shared

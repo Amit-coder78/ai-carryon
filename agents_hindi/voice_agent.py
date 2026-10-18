@@ -3,8 +3,12 @@ import os
 import base64
 
 # Sarvam AI voices — primary + fallback (Bulbul v3)
-PRIMARY_SPEAKER = "shubh"
-FALLBACK_SPEAKER = "vijay"
+# Overridable per channel without a code change (GitHub repo *variables*):
+#   HINDI_SARVAM_SPEAKER / HINDI_SARVAM_FALLBACK_SPEAKER
+#   HINDI_EDGE_VOICE / HINDI_EDGE_RATE / HINDI_EDGE_PITCH   (edge-tts fallback)
+# Unset or empty -> the defaults below, i.e. the previous behaviour.
+PRIMARY_SPEAKER = os.environ.get("HINDI_SARVAM_SPEAKER") or "shubh"
+FALLBACK_SPEAKER = os.environ.get("HINDI_SARVAM_FALLBACK_SPEAKER") or "vijay"
 
 SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY", "")
 
@@ -50,7 +54,11 @@ def _generate_edge_tts_fallback(script, output_path):
     import edge_tts
 
     async def _gen():
-        communicate = edge_tts.Communicate(script, "hi-IN-MadhurNeural")
+        voice = os.environ.get("HINDI_EDGE_VOICE") or "hi-IN-MadhurNeural"
+        rate = os.environ.get("HINDI_EDGE_RATE") or "+0%"
+        pitch = os.environ.get("HINDI_EDGE_PITCH") or "+0Hz"
+        print(f"edge-tts voice: {voice} rate={rate} pitch={pitch}")
+        communicate = edge_tts.Communicate(script, voice, rate=rate, pitch=pitch)
         await communicate.save(output_path)
 
     asyncio.run(_gen())

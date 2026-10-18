@@ -13,8 +13,12 @@ from dotenv import load_dotenv
 
 load_dotenv()  # load .env here too — don't rely on the caller having done it first
 
-PRIMARY_SPEAKER = "shubh"
-FALLBACK_SPEAKER = "vijay"
+# Overridable per channel without a code change (GitHub repo *variables*):
+#   CRICKET_SARVAM_SPEAKER / CRICKET_SARVAM_FALLBACK_SPEAKER
+#   CRICKET_EDGE_VOICE / CRICKET_EDGE_RATE / CRICKET_EDGE_PITCH   (edge-tts fallback)
+# Unset or empty -> the defaults below, i.e. the previous behaviour.
+PRIMARY_SPEAKER = os.environ.get("CRICKET_SARVAM_SPEAKER") or "shubh"
+FALLBACK_SPEAKER = os.environ.get("CRICKET_SARVAM_FALLBACK_SPEAKER") or "vijay"
 
 SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY", "")
 
@@ -59,7 +63,11 @@ def _generate_edge_tts_fallback(script, output_path):
     import edge_tts
 
     async def _gen():
-        communicate = edge_tts.Communicate(script, "hi-IN-MadhurNeural")
+        voice = os.environ.get("CRICKET_EDGE_VOICE") or "hi-IN-MadhurNeural"
+        rate = os.environ.get("CRICKET_EDGE_RATE") or "+0%"
+        pitch = os.environ.get("CRICKET_EDGE_PITCH") or "+0Hz"
+        print(f"edge-tts voice: {voice} rate={rate} pitch={pitch}")
+        communicate = edge_tts.Communicate(script, voice, rate=rate, pitch=pitch)
         await communicate.save(output_path)
 
     asyncio.run(_gen())

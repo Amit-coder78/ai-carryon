@@ -52,7 +52,8 @@ jobs:
           BHAKTI_TOKEN_JSON: ${{ secrets.BHAKTI_TOKEN_JSON }}
           YOUTUBE_BHAKTI_CHANNEL_ID: ${{ secrets.YOUTUBE_BHAKTI_CHANNEL_ID }}
           BHAKTI_AUTHORITY_CHANNEL_IDS: ${{ secrets.BHAKTI_AUTHORITY_CHANNEL_IDS }}
-          SARVAM_API_KEY: ${{ secrets.SARVAM_API_KEY }}
+          SARVAM_API_KEY: ${{ secrets.SARVAM_API_KEY_BHAKTI || secrets.SARVAM_API_KEY }}
+          SARVAM_API_KEY_SHARED: ${{ secrets.SARVAM_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
           FORCE_GENERATE: ${{ github.event.inputs.force_generate || 'false' }}
           COMMENT_FORCE: ${{ github.event.inputs.force_comments || 'false' }}

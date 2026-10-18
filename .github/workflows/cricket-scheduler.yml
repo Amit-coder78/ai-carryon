@@ -70,7 +70,13 @@ jobs:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           CRICKET_YOUTUBE_TOKEN_B64: ${{ secrets.CRICKET_YOUTUBE_TOKEN_B64 }}
           CRICKET_YOUTUBE_CHANNEL_ID: ${{ secrets.CRICKET_YOUTUBE_CHANNEL_ID }}
-          SARVAM_API_KEY: ${{ secrets.SARVAM_API_KEY }}
+          SARVAM_API_KEY: ${{ secrets.SARVAM_API_KEY_CRICKET || secrets.SARVAM_API_KEY }}
+          SARVAM_API_KEY_SHARED: ${{ secrets.SARVAM_API_KEY }}
+          CRICKET_SARVAM_SPEAKER: ${{ vars.CRICKET_SARVAM_SPEAKER }}
+          CRICKET_SARVAM_FALLBACK_SPEAKER: ${{ vars.CRICKET_SARVAM_FALLBACK_SPEAKER }}
+          CRICKET_EDGE_VOICE: ${{ vars.CRICKET_EDGE_VOICE }}
+          CRICKET_EDGE_RATE: ${{ vars.CRICKET_EDGE_RATE }}
+          CRICKET_EDGE_PITCH: ${{ vars.CRICKET_EDGE_PITCH }}
           COMMENT_AUTO_REPLY: ${{ github.event.inputs.comments_dry_run == 'true' && 'false' || 'true' }}
         run: python scheduler_cricket.py ${{ steps.pick.outputs.flag }}
 

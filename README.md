@@ -165,7 +165,7 @@ All five pipelines deploy the same way: push to `main`, and the scheduled workfl
 ## Operational Notes
 
 - **YouTube API quota**: 10,000 units/day per Google Cloud project, and each upload costs about 1,650 units. The gaming channel uses its own Google Cloud project and OAuth client.
-- **API key isolation**: each channel workflow uses its own `GROQ_API_KEY_<CHANNEL>`, `GEMINI_API_KEY_<CHANNEL>` and `PEXELS_API_KEY_<CHANNEL>` secret. The old shared keys are passed as `*_API_KEY_SHARED`, and `key_fallback.py` retries a call with the shared key only on 429/401/403 (`KEY_FALLBACK=0` disables it). Tests: `python -m unittest tests.test_key_fallback -v`.
+- **API key isolation**: each channel workflow uses its own `GROQ_API_KEY_<CHANNEL>`, `GEMINI_API_KEY_<CHANNEL>` and `PEXELS_API_KEY_<CHANNEL>` secret (Hindi, Cricket and Bhakti also get `SARVAM_API_KEY_<CHANNEL>`). The old shared keys are passed as `*_API_KEY_SHARED`, and `key_fallback.py` retries a call with the shared key only on 429/401/403 (`KEY_FALLBACK=0` disables it). Tests: `python -m unittest tests.test_key_fallback -v`.
 - **OAuth tokens** can expire (`invalid_grant`). Re-authenticate locally and update the matching GitHub secret. A Hindi token with upload-only scope silently fails view tracking with a 403.
 - **Sarvam text limits**: long scripts come back as multiple audio chunks, so always concatenate every returned segment.
 - **Flow/Veo clips**: an optional manual mode for cinematic clips exists in the English and Hindi agents (`flow_prompt_agent.py`), but the automated pipelines use Pexels or Twitch footage. Real brand names in clip prompts can trigger Flow's policy filter.

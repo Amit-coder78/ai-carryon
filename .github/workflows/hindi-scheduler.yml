@@ -51,7 +51,13 @@ jobs:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
           HINDI_TOKEN_JSON: ${{ secrets.HINDI_TOKEN_JSON }}
-          SARVAM_API_KEY: ${{ secrets.SARVAM_API_KEY }}
+          SARVAM_API_KEY: ${{ secrets.SARVAM_API_KEY_HINDI || secrets.SARVAM_API_KEY }}
+          SARVAM_API_KEY_SHARED: ${{ secrets.SARVAM_API_KEY }}
+          HINDI_SARVAM_SPEAKER: ${{ vars.HINDI_SARVAM_SPEAKER }}
+          HINDI_SARVAM_FALLBACK_SPEAKER: ${{ vars.HINDI_SARVAM_FALLBACK_SPEAKER }}
+          HINDI_EDGE_VOICE: ${{ vars.HINDI_EDGE_VOICE }}
+          HINDI_EDGE_RATE: ${{ vars.HINDI_EDGE_RATE }}
+          HINDI_EDGE_PITCH: ${{ vars.HINDI_EDGE_PITCH }}
           FORCE_GENERATE: ${{ github.event.inputs.force_generate || 'false' }}
           COMMENT_FORCE: ${{ github.event.inputs.force_comments || 'false' }}
           COMMENT_AUTO_REPLY: ${{ github.event.inputs.comments_dry_run == 'true' && 'false' || 'true' }}

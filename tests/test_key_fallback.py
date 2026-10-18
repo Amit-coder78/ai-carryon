@@ -11,8 +11,8 @@ from requests.adapters import BaseAdapter
 
 import key_fallback
 
-PERSONAL = {"GROQ_API_KEY": "gsk_personal", "GEMINI_API_KEY": "gem_personal", "PEXELS_API_KEY": "pex_personal"}
-SHARED = {"GROQ_API_KEY_SHARED": "gsk_shared", "GEMINI_API_KEY_SHARED": "gem_shared", "PEXELS_API_KEY_SHARED": "pex_shared"}
+PERSONAL = {"GROQ_API_KEY": "gsk_personal", "GEMINI_API_KEY": "gem_personal", "PEXELS_API_KEY": "pex_personal", "SARVAM_API_KEY": "sar_personal"}
+SHARED = {"GROQ_API_KEY_SHARED": "gsk_shared", "GEMINI_API_KEY_SHARED": "gem_shared", "PEXELS_API_KEY_SHARED": "pex_shared", "SARVAM_API_KEY_SHARED": "sar_shared"}
 
 
 def _auth(request):
@@ -74,6 +74,19 @@ class HttpxTests(_Base):
             r = c.post("https://generativelanguage.googleapis.com/v1beta/models/x:generateContent", json={}, **kw)
             self.assertEqual(r.status_code, 200)
             self.assertIn("gem_shared", str(calls[1].url) + calls[1].headers.get("x-goog-api-key", ""))
+
+    def test_sarvam_429_retries_with_shared_key(self):
+        calls = []
+        def handler(request):
+            calls.append(request)
+            if request.headers.get("api-subscription-key") == "sar_personal":
+                return httpx.Response(429, json={"error": "quota"})
+            return httpx.Response(200, json={"audios": []})
+        c = httpx.Client(transport=httpx.MockTransport(handler))
+        r = c.post("https://api.sarvam.ai/text-to-speech",
+                   headers={"api-subscription-key": "sar_personal"}, json={"text": "x"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(calls[1].headers["api-subscription-key"], "sar_shared")
 
     def test_gemini_400_invalid_key_falls_back(self):
         calls = []
