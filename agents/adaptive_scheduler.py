@@ -212,14 +212,10 @@ OUTCOME_MIN_VIDEOS = int(os.environ.get("SCHEDULER_OUTCOME_MIN_VIDEOS", "3"))  #
 ALLOWED_TOP_HOURS = int(os.environ.get("SCHEDULER_ALLOWED_TOP_HOURS", "6"))
 UPLOAD_LEAD_HOURS = (1, 2)   # video should be live 1-2h before viewers peak
 
-# Rough 0..1 reading of the English channel heatmap (Sep 19-Oct 16 2026),
-# indexed by IST hour 0..23. Evening 8-10 PM is brightest, 6-9 AM is darkest.
-DEFAULT_AUDIENCE_PRIOR_IST = {
-    "english": [
-        0.50, 0.45, 0.40, 0.30, 0.20, 0.15, 0.10, 0.05, 0.05, 0.10, 0.20, 0.25,
-        0.30, 0.30, 0.30, 0.35, 0.40, 0.50, 0.70, 0.85, 1.00, 1.00, 0.90, 0.70,
-    ],
-}
+# No built-in audience heatmap: English now learns its hours only from its own
+# data (see _learned_slot_decision). A prior can still be supplied through the DB
+# meta key audience_prior_ist_<channel> if a channel wants one.
+DEFAULT_AUDIENCE_PRIOR_IST = {}
 
 
 def _ist_curve_to_utc(ist_curve):
@@ -386,6 +382,91 @@ def _blended_schedule_decision(channel, now):
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Learned daily slots (no hard-coded hours, no default hour list)
+#
+# Each hourly run: score every UTC hour from OWN velocity + 24h-outcome data,
+# take the top DAILY_SLOTS hours (kept >= SLOT_MIN_SPACING_H apart), and treat
+# them as today's upload slots. A slot is "due" once its hour has arrived, and
+# we generate whenever due slots > uploads already made today (UTC day), so a
+# slot missed by a late/failed run is caught up on the next run instead of lost.
+# ─────────────────────────────────────────────────────────────────────────────
+
+DAILY_SLOTS = int(os.environ.get("SCHEDULER_DAILY_SLOTS", "3"))
+SLOT_MIN_SPACING_H = int(os.environ.get("SCHEDULER_SLOT_MIN_SPACING_H", "3"))
+LEARN_MIN_SAMPLES = int(os.environ.get("SCHEDULER_LEARN_MIN_SAMPLES", "10"))
+COLD_START_GAP_H = float(os.environ.get("SCHEDULER_COLD_START_GAP_H", "8"))
+LEARNED_SLOT_CHANNELS = {
+    c.strip() for c in os.environ.get("SCHEDULER_LEARNED_SLOT_CHANNELS", "english").split(",") if c.strip()
+}
+
+
+def _pick_slots(scores, n, min_spacing_h):
+    """Top-n hours by score, at least min_spacing_h apart (circular). Sorted."""
+    chosen = []
+    for h in sorted(range(24), key=lambda x: scores[x], reverse=True):
+        if all(min((h - c) % 24, (c - h) % 24) >= min_spacing_h for c in chosen):
+            chosen.append(h)
+        if len(chosen) == n:
+            break
+    return sorted(chosen)
+
+
+def _learned_slot_decision(channel, now):
+    """(bool, reason). Never returns None; falls back to spacing, not fixed hours."""
+    from agents.database import db
+
+    done = len(db.get_recent_posted(
+        hours=now.hour + now.minute / 60 + now.second / 3600, channel=channel))
+    if done >= DAILY_SLOTS:
+        return False, f"[{channel}] Daily target reached ({done}/{DAILY_SLOTS} today UTC)"
+
+    last_dt = None
+    try:
+        last_iso = db.get_meta(f"last_upload_hour_{channel}")
+        if last_iso:
+            last_dt = datetime.fromisoformat(last_iso)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            gap = (now - last_dt).total_seconds() / 3600
+            if gap < 1.0:
+                return False, f"[{channel}] Only {gap:.1f}h since last upload - need 1h gap"
+    except Exception:
+        last_dt = None
+
+    try:
+        velocity, vn, outcome, on = _collect_recent_signals(db, channel, now)
+    except Exception as e:
+        print(f"[{channel}] could not read snapshots: {e}")
+        vn = [0] * 24
+
+    if sum(vn) < LEARN_MIN_SAMPLES:
+        # Cold start: no data yet, so just space uploads out. No fixed hours.
+        if last_dt is None:
+            return True, f"[{channel}] Cold start: no data and no previous upload"
+        gap = (now - last_dt).total_seconds() / 3600
+        if gap >= COLD_START_GAP_H:
+            return True, f"[{channel}] Cold start: {gap:.1f}h since last upload"
+        return False, f"[{channel}] Cold start: waiting ({gap:.1f}h < {COLD_START_GAP_H}h)"
+
+    # velocity says when views ARRIVE; shift back so we score the UPLOAD hour
+    shifted = [
+        sum(velocity[(h + lead) % 24] for lead in UPLOAD_LEAD_HOURS) / len(UPLOAD_LEAD_HOURS)
+        for h in range(24)
+    ]
+    scores = [
+        (OUTCOME_STRENGTH * shifted[h] + on[h] * outcome[h]) / (OUTCOME_STRENGTH + on[h])
+        for h in range(24)
+    ]
+    slots = _pick_slots(scores, DAILY_SLOTS, SLOT_MIN_SPACING_H)
+    due = sum(1 for h in slots if h <= now.hour)
+    detail = f"slots={slots}, due={due}, done={done}, {sum(vn)} velocity samples"
+    if due > done:
+        return True, f"[{channel}] Hour {now.hour:02d}:00 UTC - slot due ({detail})"
+    return False, f"[{channel}] Hour {now.hour:02d}:00 UTC - waiting for next slot ({detail})"
+
+
+
 def should_upload_now_for_channel(channel="english", top_n=5, tolerance_hours=1):
     """
     Multi-channel adaptive scheduler.
@@ -403,6 +484,9 @@ def should_upload_now_for_channel(channel="english", top_n=5, tolerance_hours=1)
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
     current_hour = now.hour
+
+    if channel in LEARNED_SLOT_CHANNELS:
+        return _learned_slot_decision(channel, now)
 
     # Prior (audience heatmap) + learned velocity + upload outcomes. Only for
     # channels that have a prior; the rest fall through to the original logic.

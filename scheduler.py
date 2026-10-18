@@ -33,7 +33,7 @@ import datetime
 
 LOG_FILE = "output/scheduler_log.txt"
 
-VIDEOS_PER_DAY = 10  # daily upload quota — raise for manual testing headroom
+VIDEOS_PER_DAY = int(os.environ.get("VIDEOS_PER_DAY", "3"))  # daily upload quota
 
 
 def log(message):
@@ -369,9 +369,13 @@ def main():
         log("Not a top-velocity hour — skipping generation this run")
         return
 
-    posted_today = get_recent_topics(hours=24)
+    # Daily cap by UTC calendar day (same definition the slot gate uses). A rolling
+    # 24h window would block a slot at 17:00 because yesterday's 17:20 upload is
+    # still inside it.
+    _now = datetime.now(timezone.utc)
+    posted_today = get_recent_topics(hours=_now.hour + _now.minute / 60 + _now.second / 3600)
     if len(posted_today) >= VIDEOS_PER_DAY:
-        log(f"Daily cap reached ({len(posted_today)} posted in last 24h) — skipping generation this run")
+        log(f"Daily cap reached ({len(posted_today)} posted today UTC) — skipping generation this run")
         return
 
     run_generation_pipeline()
