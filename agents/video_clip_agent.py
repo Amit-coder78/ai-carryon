@@ -31,16 +31,27 @@ def _pick_best_video_file(video_files):
     return candidates[0]["link"]
 
 
-def search_pexels_video(query, min_duration=3, max_duration=25):
+def _ranker_on(channel):
+    """Semantic clip ranking on? Never raises; any problem means 'off' (old behaviour)."""
+    try:
+        from agents import clip_ranker
+        return clip_ranker.enabled(channel)
+    except Exception:
+        return False
+
+
+def search_pexels_video(query, min_duration=3, max_duration=25, channel="english", used_ids=None):
     pexels_key = os.getenv("PEXELS_API_KEY", "")
     if not pexels_key:
         return None
+    use_rank = _ranker_on(channel)
     headers = {"Authorization": pexels_key}
     params = {
         "query": query,
         "orientation": "portrait",
         "size": "medium",
-        "per_page": 1,
+        # semantic ranking needs a pool; still ONE Pexels request per clip
+        "per_page": 15 if use_rank else 1,
         "min_duration": min_duration,
         "max_duration": max_duration,
     }
@@ -50,19 +61,42 @@ def search_pexels_video(query, min_duration=3, max_duration=25):
     videos = data.get("videos", [])
     if not videos:
         return None
-    return _pick_best_video_file(videos[0].get("video_files", []))
+    if not use_rank:
+        return _pick_best_video_file(videos[0].get("video_files", []))
+    try:
+        from agents import clip_ranker
+        cands = [{"id": v.get("id"), "url": v.get("url", ""), "width": v.get("width") or 0,
+                  "height": v.get("height") or 0, "duration": v.get("duration") or 0,
+                  "files": v.get("video_files", [])} for v in videos if v.get("id")]
+        ranked = clip_ranker.rank_for_query(
+            query, cands, min_duration, max_duration, exclude_ids=used_ids,
+            extra_reject=clip_ranker.CHANNEL_REJECT.get(channel, ()))
+    except Exception as e:  # ranker bug must never block a render: use the old pick
+        print(f"  clip_ranker failed ({e}) - using first Pexels result")
+        return _pick_best_video_file(videos[0].get("video_files", []))
+    if not ranked:
+        return None  # nothing relevant: caller retries with a broader query
+    if used_ids is not None:
+        used_ids.add(ranked[0]["id"])
+    return _pick_best_video_file(ranked[0]["files"])
 
 
-def download_video_clip(prompt, output_path):
+def download_video_clip(prompt, output_path, channel="english", used_ids=None):
     clean_prompt = re.sub(r"[^a-zA-Z0-9 ,]", "", prompt).strip()
     search_query = " ".join(clean_prompt.split()[:5])
+    # Retry once with a shorter, broader query (e.g. just the first 2 words)
+    broad_query = " ".join(clean_prompt.split()[:2])
+    if _ranker_on(channel):
+        from agents import clip_ranker
+        # filler words dropped BEFORE trimming so the noun survives; the retry
+        # keeps the two longest subject words instead of possibly just "close up"
+        search_query = clip_ranker.compact_query(clean_prompt, 5) or search_query
+        broad_query = clip_ranker.broaden_query(clean_prompt) or broad_query
 
-    video_url = search_pexels_video(search_query)
+    video_url = search_pexels_video(search_query, channel=channel, used_ids=used_ids)
     if not video_url:
-        # Retry once with a shorter, broader query (e.g. just the first 2 words)
-        broad_query = " ".join(clean_prompt.split()[:2])
         if broad_query != search_query:
-            video_url = search_pexels_video(broad_query)
+            video_url = search_pexels_video(broad_query, channel=channel, used_ids=used_ids)
 
     if not video_url:
         raise RuntimeError(f"No Pexels video found for query: '{search_query}'")
@@ -90,10 +124,11 @@ def generate_background_clips(topic, script, num_clips=4):
 
     clip_paths = []
     errors = []
+    used_ids = set()  # no clip repeated inside one video
     for i, prompt in enumerate(prompts):
         output_path = os.path.join(folder, f"{i+1}.mp4")
         try:
-            download_video_clip(prompt, output_path)
+            download_video_clip(prompt, output_path, channel="english", used_ids=used_ids)
             clip_paths.append(output_path)
             print(f"Clip {i+1}: downloaded")
         except Exception as e:

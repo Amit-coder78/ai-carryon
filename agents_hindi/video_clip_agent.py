@@ -173,11 +173,23 @@ def _slug_words(url):
     return {w for w in m.group(1).split("-") if not w.isdigit()}
 
 
-def score_candidate(c, query_rank, target_sec):
+def score_candidate(c, query_rank, target_sec, channel="hindi"):
     q_words = set(c["query"].split())
     relevance = len(q_words & _slug_words(c["url"])) / max(len(q_words), 1)
 
-    score = relevance * 4.0
+    penalty = 0.0
+    try:  # shared semantic scorer; any problem keeps the old relevance above
+        from agents import clip_ranker
+        if clip_ranker.enabled(channel):
+            relevance, rejected = clip_ranker.score_title(
+                c["query"], clip_ranker.slug_title(c["url"]),
+                clip_ranker.CHANNEL_REJECT.get(channel, ()))
+            if rejected:  # wrong meaning (e.g. "car driver" for "screwdriver"): push to the bottom
+                penalty = 5.0
+    except Exception:
+        pass
+
+    score = relevance * 4.0 - penalty
     score += (1.0, 0.5, 0.25)[min(query_rank, 2)]          # earlier query = more specific
 
     portrait = c["height"] > c["width"]
@@ -198,14 +210,14 @@ def score_candidate(c, query_rank, target_sec):
     return score
 
 
-def rank_candidates(per_query_results, banned_ids, target_sec):
+def rank_candidates(per_query_results, banned_ids, target_sec, channel="hindi"):
     """per_query_results: list of candidate lists, one per query (in order)."""
     best = {}
     for rank, results in enumerate(per_query_results):
         for c in results:
             if c["id"] in banned_ids:
                 continue
-            s = score_candidate(c, rank, target_sec)
+            s = score_candidate(c, rank, target_sec, channel)
             if c["id"] not in best or s > best[c["id"]][0]:
                 best[c["id"]] = (s, c)
     return [c for _, c in sorted(best.values(), key=lambda x: -x[0])]

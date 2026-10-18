@@ -95,7 +95,7 @@ app.py             Streamlit entrypoint
 | **Saturation engine** | Scores topics 0-100 from recent competing video count and authority-channel coverage. Fails open if the YouTube API is unavailable |
 | **Comparison engine** | Benchmarks the top 10 competing videos (views, engagement, title length, duration) and feeds recommendations into script and SEO generation |
 | **A/B title testing** | Generates 3 titles from 8 psychological patterns, scores each on a 10-point rubric, and logs every test for pattern tracking |
-| **Adaptive scheduling** | Generates and uploads only when the current hour matches a learned peak window (minimum 3 samples), with default hours as fallback |
+| **Adaptive scheduling**              | Scores every UTC hour from an audience-heatmap prior + recent view velocity + 24h views by upload hour (last 28 days), and uploads only in the best 6 hours; the prior can be updated via the DB meta key `audience_prior_ist_<channel>` |
 | **View tracking** | Hourly snapshots of views, likes, and comments per video |
 
 ---

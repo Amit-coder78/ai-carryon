@@ -94,10 +94,11 @@ def generate_background_clips(topic, script, num_clips=4):
 
     clip_paths = []
     errors = []
+    used_ids = set()  # no clip repeated inside one video
     for i, prompt in enumerate(prompts):
         output_path = os.path.join(folder, f"{i+1}.mp4")
         try:
-            download_video_clip(prompt, output_path)
+            download_video_clip(prompt, output_path, channel="bhakti", used_ids=used_ids)
             clip_paths.append(output_path)
             print(f"Clip {i+1}: downloaded")
         except Exception as e:

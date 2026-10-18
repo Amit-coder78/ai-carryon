@@ -9,6 +9,7 @@ Usage:
 """
 
 import os
+import json
 from datetime import datetime, timezone, timedelta
 
 
@@ -179,6 +180,212 @@ def get_schedule_recommendation():
 
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Blended upload scoring: audience prior + learned velocity + upload outcomes
+#
+# Three signals, from weakest to strongest:
+#   1. PRIOR    - the YouTube Studio "When your viewers are on YouTube" heatmap.
+#                 It is a starting guess only (YouTube has no API for it).
+#   2. VELOCITY - views gained per hour from our own hourly snapshots (when views
+#                 ARRIVE). Both 1 and 2 describe viewer activity, so they are
+#                 shifted by UPLOAD_LEAD_HOURS to get the best hour to UPLOAD.
+#   3. OUTCOME  - what actually happened: views 24h after publish, grouped by the
+#                 UTC hour the video was uploaded. This is the direct signal.
+#
+#   audience(h) = (PRIOR_STRENGTH*prior(h) + n_v(h)*velocity(h)) / (PRIOR_STRENGTH + n_v(h))
+#   score(h)    = (OUTCOME_STRENGTH*upload_shift(audience)(h) + n_o(h)*outcome(h))
+#                 / (OUTCOME_STRENGTH + n_o(h))
+#
+# Few samples -> the prior leads. More samples -> our own data takes over.
+# Only the last LEARN_WINDOW_DAYS days are used, so it follows audience changes.
+#
+# Update the prior WITHOUT a code change: store a JSON list of 24 numbers
+# (0..1, index = IST hour) in the DB meta key  audience_prior_ist_<channel>:
+#   db.set_meta("audience_prior_ist_english", json.dumps([...24 numbers...]))
+# Channels with no prior (and no meta key) keep the old behaviour.
+# ─────────────────────────────────────────────────────────────────────────────
+
+LEARN_WINDOW_DAYS = int(os.environ.get("SCHEDULER_LEARN_WINDOW_DAYS", "28"))
+PRIOR_STRENGTH = float(os.environ.get("SCHEDULER_PRIOR_STRENGTH", "6"))     # prior "worth" N velocity samples
+OUTCOME_STRENGTH = float(os.environ.get("SCHEDULER_OUTCOME_STRENGTH", "3")) # ...and N videos for outcomes
+OUTCOME_MIN_VIDEOS = int(os.environ.get("SCHEDULER_OUTCOME_MIN_VIDEOS", "3"))  # per upload hour
+ALLOWED_TOP_HOURS = int(os.environ.get("SCHEDULER_ALLOWED_TOP_HOURS", "6"))
+UPLOAD_LEAD_HOURS = (1, 2)   # video should be live 1-2h before viewers peak
+
+# Rough 0..1 reading of the English channel heatmap (Sep 19-Oct 16 2026),
+# indexed by IST hour 0..23. Evening 8-10 PM is brightest, 6-9 AM is darkest.
+DEFAULT_AUDIENCE_PRIOR_IST = {
+    "english": [
+        0.50, 0.45, 0.40, 0.30, 0.20, 0.15, 0.10, 0.05, 0.05, 0.10, 0.20, 0.25,
+        0.30, 0.30, 0.30, 0.35, 0.40, 0.50, 0.70, 0.85, 1.00, 1.00, 0.90, 0.70,
+    ],
+}
+
+
+def _ist_curve_to_utc(ist_curve):
+    """IST = UTC+5:30, so UTC hour h covers IST h+5:30..h+6:30 -> average two IST hours."""
+    return [(ist_curve[(h + 5) % 24] + ist_curve[(h + 6) % 24]) / 2 for h in range(24)]
+
+
+def _load_audience_prior_utc(channel, db=None):
+    """Return 24 weights (index = UTC hour), or None if this channel has no prior."""
+    curve = None
+    if db is not None:
+        try:
+            raw = db.get_meta(f"audience_prior_ist_{channel}")
+            if raw:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list) and len(parsed) == 24:
+                    curve = [float(x) for x in parsed]
+        except Exception as e:
+            print(f"[{channel}] bad audience prior in DB meta, using default: {e}")
+    if curve is None:
+        curve = DEFAULT_AUDIENCE_PRIOR_IST.get(channel)
+    if curve is None:
+        return None
+    top = max(curve) or 1.0
+    return _ist_curve_to_utc([c / top for c in curve])
+
+
+def _collect_recent_signals(db, channel, now):
+    """
+    One pass over the stored snapshots (last LEARN_WINDOW_DAYS days only).
+    Returns:
+      velocity (24 floats 0..1), velocity_n (24 ints)   - by hour views ARRIVED
+      outcome  (24 floats 0..1), outcome_n  (24 ints)   - by hour video was UPLOADED
+    """
+    from agents.database import _parse_ts_safe
+    cutoff = now - timedelta(days=LEARN_WINDOW_DAYS)
+
+    vsum, vcnt = [0.0] * 24, [0] * 24
+    uploads = []   # (upload_hour_utc, views_at_24h)
+
+    for data in db.get_all_snapshots(channel=channel).values():
+        snaps = data.get("snapshots") or []
+
+        # velocity: views per hour, keyed by the hour of the later snapshot
+        for i in range(1, len(snaps)):
+            try:
+                t1 = _parse_ts_safe(snaps[i - 1]["timestamp"])
+                t2 = _parse_ts_safe(snaps[i]["timestamp"])
+                if t2 < cutoff:
+                    continue
+                hrs = (t2 - t1).total_seconds() / 3600
+                if hrs <= 0:
+                    continue
+                gained = max(snaps[i]["views"] - snaps[i - 1]["views"], 0)
+                vsum[t2.hour] += gained / hrs
+                vcnt[t2.hour] += 1
+            except Exception:
+                continue
+
+        # outcome: views ~24h after publish, grouped by upload hour
+        try:
+            pub_raw = data.get("published")
+            if not pub_raw or not snaps:
+                continue
+            pub = _parse_ts_safe(pub_raw)
+            if pub < cutoff or now - pub < timedelta(hours=24):
+                continue
+            target = pub + timedelta(hours=24)
+            best, best_gap = None, None
+            for sn in snaps:
+                gap = abs((_parse_ts_safe(sn["timestamp"]) - target).total_seconds())
+                if best_gap is None or gap < best_gap:
+                    best, best_gap = sn, gap
+            if best is not None and best_gap <= 6 * 3600:   # snapshot within 6h of the 24h mark
+                uploads.append((pub.hour, float(best["views"])))
+        except Exception:
+            continue
+
+    vavg = [vsum[h] / vcnt[h] if vcnt[h] else 0.0 for h in range(24)]
+    vtop = max(vavg) or 1.0
+    velocity = [a / vtop for a in vavg]
+
+    # outcome: views_24h relative to the channel's median, averaged per upload hour
+    outcome, ocnt = [0.0] * 24, [0] * 24
+    if uploads:
+        ordered = sorted(v for _, v in uploads)
+        median = ordered[len(ordered) // 2] or 1.0
+        osum = [0.0] * 24
+        for hour, views in uploads:
+            osum[hour] += min(views / median, 5.0)     # cap so one viral video can't dominate
+            ocnt[hour] += 1
+        oavg = [osum[h] / ocnt[h] if ocnt[h] >= OUTCOME_MIN_VIDEOS else 0.0 for h in range(24)]
+        otop = max(oavg) or 1.0
+        outcome = [a / otop for a in oavg]
+        ocnt = [c if c >= OUTCOME_MIN_VIDEOS else 0 for c in ocnt]
+    return velocity, vcnt, outcome, ocnt
+
+
+def compute_upload_scores(channel, now=None, db=None):
+    """
+    Score every UTC hour as an UPLOAD hour (0..1, higher = better).
+    Returns (scores, info), or (None, None) if the channel has no prior.
+    """
+    now = now or datetime.now(timezone.utc)
+    if db is None:
+        from agents.database import db as _db
+        db = _db
+    prior = _load_audience_prior_utc(channel, db)
+    if prior is None:
+        return None, None
+    try:
+        velocity, vn, outcome, on = _collect_recent_signals(db, channel, now)
+    except Exception as e:
+        print(f"[{channel}] could not read snapshots, using prior only: {e}")
+        velocity, vn, outcome, on = [0.0] * 24, [0] * 24, [0.0] * 24, [0] * 24
+
+    audience = [
+        (PRIOR_STRENGTH * prior[h] + vn[h] * velocity[h]) / (PRIOR_STRENGTH + vn[h])
+        for h in range(24)
+    ]
+    shifted = [
+        sum(audience[(h + lead) % 24] for lead in UPLOAD_LEAD_HOURS) / len(UPLOAD_LEAD_HOURS)
+        for h in range(24)
+    ]
+    scores = [
+        (OUTCOME_STRENGTH * shifted[h] + on[h] * outcome[h]) / (OUTCOME_STRENGTH + on[h])
+        for h in range(24)
+    ]
+    return scores, {"velocity_samples": sum(vn), "outcome_videos": sum(on), "outcome_n": on}
+
+
+def _blended_schedule_decision(channel, now):
+    """(bool, reason) from blended scores, or None if the channel has no prior."""
+    try:
+        from agents.database import db
+        scores, info = compute_upload_scores(channel, now=now, db=db)
+    except Exception as e:
+        print(f"[{channel}] blended scheduler error, using old logic: {e}")
+        return None
+    if scores is None:
+        return None
+
+    ranked = sorted(range(24), key=lambda h: scores[h], reverse=True)
+    allowed = sorted(ranked[:ALLOWED_TOP_HOURS])
+    hour = now.hour
+    detail = (f"{info['velocity_samples']} velocity samples, "
+              f"{info['outcome_videos']} scored videos")
+    if hour not in allowed:
+        return False, (
+            f"[{channel}] Hour {hour:02d}:00 UTC (score {scores[hour]:.2f}) not in best "
+            f"{ALLOWED_TOP_HOURS} upload hours {allowed} ({detail})"
+        )
+    try:
+        last_iso = db.get_meta(f"last_upload_hour_{channel}")
+        if last_iso:
+            gap = (now - datetime.fromisoformat(last_iso)).total_seconds() / 3600
+            if gap < 1.0:
+                return False, f"[{channel}] Only {gap:.1f}h since last upload — need 1h gap"
+    except Exception:
+        pass
+    return True, (
+        f"[{channel}] Hour {hour:02d}:00 UTC (score {scores[hour]:.2f}) is in best "
+        f"{ALLOWED_TOP_HOURS} upload hours {allowed} ({detail})"
+    )
+
+
 def should_upload_now_for_channel(channel="english", top_n=5, tolerance_hours=1):
     """
     Multi-channel adaptive scheduler.
@@ -196,6 +403,12 @@ def should_upload_now_for_channel(channel="english", top_n=5, tolerance_hours=1)
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
     current_hour = now.hour
+
+    # Prior (audience heatmap) + learned velocity + upload outcomes. Only for
+    # channels that have a prior; the rest fall through to the original logic.
+    decision = _blended_schedule_decision(channel, now)
+    if decision is not None:
+        return decision
 
     # Default fallback hours per channel
     defaults = {
@@ -277,6 +490,14 @@ if __name__ == "__main__":
     rec = get_schedule_recommendation()
     print(f"Status: {rec['status']}")
     print(f"Message: {rec['message']}")
+    print()
+    scores, info = compute_upload_scores("english")
+    if scores is not None:
+        print()
+        print(f"Blended upload scores, English ({info['velocity_samples']} velocity samples, "
+              f"{info['outcome_videos']} scored videos):")
+        for h in sorted(range(24), key=lambda x: scores[x], reverse=True)[:ALLOWED_TOP_HOURS]:
+            print(f"  {h:02d}:00 UTC (~{(h + 5) % 24:02d}:30 IST) — score {scores[h]:.2f}")
     print()
     print("Top upload windows:")
     for w in rec["windows"]:

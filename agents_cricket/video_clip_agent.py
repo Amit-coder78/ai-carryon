@@ -151,7 +151,7 @@ def _pick_unique_clip(queries, output_path, banned_ids, target_sec, structured):
     """Searches, filters cheap-first, downloads the best candidates one at a
     time and returns the first that passes hash checks. None if nothing fits."""
     pools = [search_candidates(q) for q in queries]
-    ranked = rank_candidates(pools, banned_ids, target_sec)
+    ranked = rank_candidates(pools, banned_ids, target_sec, channel="cricket")
 
     tried = 0
     for cand in ranked:
