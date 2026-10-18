@@ -42,9 +42,9 @@ jobs:
       - name: Run Bhakti scheduler
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_BHAKTI || secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_BHAKTI || secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY_BHAKTI || secrets.PEXELS_API_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           BHAKTI_TOKEN_JSON: ${{ secrets.BHAKTI_TOKEN_JSON }}
           YOUTUBE_BHAKTI_CHANNEL_ID: ${{ secrets.YOUTUBE_BHAKTI_CHANNEL_ID }}
