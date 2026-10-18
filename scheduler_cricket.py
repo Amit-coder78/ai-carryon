@@ -7,6 +7,8 @@ Run locally: python scheduler_cricket.py
 Deployed:    called by app_cricket.py's /trigger endpoint
 """
 import os
+import key_fallback
+key_fallback.install()  # per-channel key first, shared key on 429/401/403
 import json
 from dotenv import load_dotenv
 load_dotenv()

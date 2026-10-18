@@ -5,6 +5,8 @@
 # Cloud Scheduler. See scheduler.py's module docstring for the full rationale.
 
 import os
+import key_fallback
+key_fallback.install()  # per-channel key first, shared key on 429/401/403
 import datetime
 
 LOG_FILE = "output/scheduler_hindi_log.txt"

@@ -5,6 +5,8 @@
 # run, triggered hourly by Cloud Scheduler / Render cron / Railway cron.
 
 import os
+import key_fallback
+key_fallback.install()  # per-channel key first, shared key on 429/401/403
 import datetime
 
 LOG_FILE = "output/scheduler_bhakti_log.txt"

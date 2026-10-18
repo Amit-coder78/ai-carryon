@@ -25,6 +25,8 @@ none of that is needed anymore.
 """
 
 import os
+import key_fallback
+key_fallback.install()  # per-channel key first, shared key on 429/401/403
 import time
 import datetime
 

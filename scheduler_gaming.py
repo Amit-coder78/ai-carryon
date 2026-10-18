@@ -9,6 +9,8 @@ Deployed:    .github/workflows/gaming-scheduler.yml (cron, no server needed
              script directly as a scheduled GitHub Actions job).
 """
 import os
+import key_fallback
+key_fallback.install()  # per-channel key first, shared key on 429/401/403
 from dotenv import load_dotenv
 load_dotenv()
 
