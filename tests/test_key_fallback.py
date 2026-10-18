@@ -88,6 +88,22 @@ class HttpxTests(_Base):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(calls[1].headers["api-subscription-key"], "sar_shared")
 
+    def test_sarvam_402_out_of_credits_falls_back_for_rest_of_run(self):
+        calls = []
+        def handler(request):
+            calls.append(request.headers.get("api-subscription-key"))
+            if request.headers.get("api-subscription-key") == "sar_personal":
+                return httpx.Response(402, json={"error": {"code": "insufficient_quota_error"}})
+            return httpx.Response(200, json={"audios": []})
+        c = httpx.Client(transport=httpx.MockTransport(handler))
+        url = "https://api.sarvam.ai/text-to-speech"
+        r = c.post(url, headers={"api-subscription-key": "sar_personal"}, json={})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(calls, ["sar_personal", "sar_shared"])
+        calls.clear()
+        c.post(url, headers={"api-subscription-key": "sar_personal"}, json={})
+        self.assertEqual(calls, ["sar_shared"])  # personal key not retried this run
+
     def test_gemini_400_invalid_key_falls_back(self):
         calls = []
         c = self._client(400, calls, body=b'{"error":{"message":"API key not valid. Please pass a valid API key."}}')

@@ -7,11 +7,12 @@ Each channel workflow sets, for example:
 
 install() wraps the HTTP layer (httpx for Groq/Gemini/Sarvam SDKs, requests for Pexels
 and raw Gemini calls). If a call to api.groq.com / generativelanguage.googleapis.com /
-api.pexels.com / api.sarvam.ai comes back 429 (rate limit) or 401/403 (bad/revoked key), the same
+api.pexels.com / api.sarvam.ai comes back 429 (rate limit), 402 (out of credits) or 401/403 (bad/revoked key), the same
 request is retried once with the shared key. No call site needs to change.
 
 - 429  -> keep using the shared key for COOLDOWN_429_SECONDS, then try personal again.
-- 401/403 (or Gemini "API key not valid") -> use the shared key for the rest of the run.
+- 401/402/403 (or Gemini "API key not valid") -> use the shared key for the rest of the run.
+  (402 = out of credits, e.g. Sarvam "No credits available".)
 - No *_SHARED secret, or it equals the personal key -> this module does nothing.
 
 Env: KEY_FALLBACK=0 disables it. KEY_FALLBACK_COOLDOWN_429 overrides the 60s cooldown.
@@ -58,7 +59,7 @@ def _decide(provider, status, body_text=""):
     """Seconds to switch to the shared key, or None if the response is fine."""
     if status == 429:
         return COOLDOWN_429_SECONDS
-    if status in (401, 403):
+    if status in (401, 402, 403):  # 402 = out of credits (Sarvam: insufficient_quota_error)
         return _FOREVER
     if provider == "gemini" and status == 400:
         low = (body_text or "").lower()
