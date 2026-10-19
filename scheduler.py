@@ -372,7 +372,7 @@ def main():
     # Daily cap by UTC calendar day (same definition the slot gate uses). A rolling
     # 24h window would block a slot at 17:00 because yesterday's 17:20 upload is
     # still inside it.
-    _now = datetime.now(timezone.utc)
+    _now = datetime.datetime.now(datetime.timezone.utc)
     posted_today = get_recent_topics(hours=_now.hour + _now.minute / 60 + _now.second / 3600)
     if len(posted_today) >= VIDEOS_PER_DAY:
         log(f"Daily cap reached ({len(posted_today)} posted today UTC) — skipping generation this run")
