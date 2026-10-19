@@ -77,6 +77,23 @@ def _note(provider, status, seconds):
         print(f"[key_fallback] {provider}: HTTP {status} on personal key -> using shared key {when}")
 
 
+def switch_to_shared(provider, reason="budget"):
+    """Deliberately move a provider to the shared key for the rest of the run.
+
+    Used by the LLM routers when the personal key's per-run call budget is spent
+    (that is a self-imposed cap, not a 429, so the normal fallback never fires).
+    Returns True if switched, False if there is no distinct shared key.
+    """
+    if not _fallback_available(provider):
+        return False
+    with _lock:
+        already = time.monotonic() < _use_shared_until.get(provider, 0)
+        _use_shared_until[provider] = time.monotonic() + _FOREVER
+    if not already:
+        print(f"[key_fallback] {provider}: {reason} -> using shared key for the rest of the run")
+    return True
+
+
 def reset():
     """Forget cooldowns (tests / start of a run)."""
     with _lock:

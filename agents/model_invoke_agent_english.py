@@ -60,6 +60,8 @@ _state = {
 # How many Groq calls to allow per scheduler run before proactively switching
 # to Gemini for the rest of the run. Tune this to your Groq plan's RPM limit.
 GROQ_MAX_CALLS_PER_RUN = int(os.environ.get("GROQ_MAX_CALLS_PER_RUN", "8"))
+# Extra Groq calls allowed on the SHARED key once the personal budget is spent (0 = off).
+GROQ_SHARED_EXTRA_CALLS = int(os.environ.get("GROQ_SHARED_EXTRA_CALLS", "8"))
 
 # How long to wait for a single call before giving up on it.
 GROQ_TIMEOUT_SECONDS = int(os.environ.get("GROQ_TIMEOUT_SECONDS", "15"))
@@ -82,6 +84,7 @@ def reset_groq_budget():
         _state["gemini_consecutive_fail"] = 0
         _state["groq_dead"] = False
         _state["gemini_dead"] = False
+        _state["groq_on_shared"] = False
     print(
         f"[llm_router:english] Reset for new run — Groq budget: {GROQ_MAX_CALLS_PER_RUN} calls, "
         f"circuit breaker trips after {FAILURE_THRESHOLD} consecutive fails per provider"
@@ -162,15 +165,30 @@ def _record_outcome(provider, success):
 def _try_groq(prompt, groq_model, temperature):
     """Attempt Groq once, respecting budget. Returns response or None."""
     with _lock:
-        under_budget = _state["groq_call_count"] < GROQ_MAX_CALLS_PER_RUN
+        limit = GROQ_MAX_CALLS_PER_RUN + (GROQ_SHARED_EXTRA_CALLS if _state.get("groq_on_shared") else 0)
+        under_budget = _state["groq_call_count"] < limit
+    if not under_budget and not _state.get("groq_on_shared") and GROQ_SHARED_EXTRA_CALLS > 0:
+        # Personal budget spent: carry on with the shared Groq key for a few more calls
+        # instead of dropping straight to the weaker fallbacks.
+        try:
+            import key_fallback
+            switched = key_fallback.switch_to_shared("groq", reason="personal Groq budget spent")
+        except Exception:
+            switched = False
+        if switched:
+            with _lock:
+                _state["groq_on_shared"] = True
+                limit = GROQ_MAX_CALLS_PER_RUN + GROQ_SHARED_EXTRA_CALLS
+                under_budget = _state["groq_call_count"] < limit
+            print(f"[llm_router:english] Groq budget on personal key spent — +{GROQ_SHARED_EXTRA_CALLS} calls on shared key")
     if not under_budget:
-        print(f"[llm_router:english] Groq budget exhausted ({GROQ_MAX_CALLS_PER_RUN}/run) — skipping to Gemini")
+        print(f"[llm_router:english] Groq budget exhausted ({limit}/run) — skipping to Gemini")
         return None
 
     with _lock:
         _state["groq_call_count"] += 1
         count_now = _state["groq_call_count"]
-    print(f"[llm_router:english] Trying Groq ({count_now}/{GROQ_MAX_CALLS_PER_RUN})")
+    print(f"[llm_router:english] Trying Groq ({count_now}/{limit})")
 
     resp, err = _run_with_timeout(
         lambda: _get_groq(groq_model, temperature).invoke(prompt), GROQ_TIMEOUT_SECONDS
