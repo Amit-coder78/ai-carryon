@@ -10,7 +10,7 @@ from agents_gaming.v2_utils import (
 
 HOOK_TYPES = {
     "CURIOSITY": "makes the viewer need to know what happens (a question, a gap)",
-    "SHOCK": "states the unbelievable fact of the moment bluntly",
+    "SHOCK": "a bold, blunt claim about the stakes or the situation that does NOT reveal the outcome",
     "STORY": "drops the viewer into the situation like the first line of a story",
     "REACTION": "voices the disbelief a viewer would feel watching it",
     "CHALLENGE": "dares the viewer to spot/predict/keep up with something",
@@ -53,7 +53,7 @@ Game: {moment.get('game', '')}
 Type: {moment.get('moment_type', '')}
 What happened: {moment.get('what_happened', '')}
 Setup: {moment.get('setup', '')}
-Payoff: {moment.get('payoff', '')}
+Payoff (SECRET - the viewer must not learn it from the hook; never state, paraphrase or ask about it): {moment.get('payoff', '')}
 Reaction: {moment.get('reaction', '')}
 
 Clip data:
@@ -64,6 +64,8 @@ Write exactly 5 hooks, ONE of each type:
 
 Rules:
 - {MIN_WORDS}-{MAX_WORDS} words each, one sentence, spoken like a creator, not an announcer
+- The hook plays BEFORE the payoff on screen: it may only use the setup and the stakes. Never name the
+  outcome, the final line someone says, or what the streamer does at the end (a reviewer rejects those as spoilers).
 - Tease the payoff, never give it away; no greetings; no "you won't believe", "watch what happens",
   "nobody expected", "insane moment", "absolutely incredible", "let's take a look"
 - Prefer a concrete statement or a specific detail over a generic question ("What if...", "What triggers...");
