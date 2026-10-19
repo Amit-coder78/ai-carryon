@@ -10,7 +10,7 @@ from agents_gaming.v2_utils import (
 
 HOOK_TYPES = {
     "CURIOSITY": "makes the viewer need to know what happens (a question, a gap)",
-    "SHOCK": "a bold, blunt claim about the stakes or the situation that does NOT reveal the outcome",
+    "SHOCK": "a bold, blunt claim built ONLY from the setup facts above (invent nothing) that does NOT reveal the outcome",
     "STORY": "drops the viewer into the situation like the first line of a story",
     "REACTION": "voices the disbelief a viewer would feel watching it",
     "CHALLENGE": "dares the viewer to spot/predict/keep up with something",
