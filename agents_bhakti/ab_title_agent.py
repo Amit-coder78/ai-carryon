@@ -125,6 +125,7 @@ def _log_result_bhakti(result):
             winner_score=winner.get("score", 0),
             all_variations=result.get("variations", []),
             generated_at=result.get("generated_at"),
+            channel="bhakti",
         )
     except Exception as e:
         print(f"Bhakti DB log error: {e}")

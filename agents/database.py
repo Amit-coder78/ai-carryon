@@ -253,6 +253,17 @@ class Database:
                     conn.execute(f"ALTER TABLE ab_title_tests ADD COLUMN {col} {decl}")
                     print(f"Migrated ab_title_tests: added column {col}")
 
+            # One-time self-heal (safe to repeat): Hindi/Bhakti rows were saved
+            # without a channel, so they defaulted to 'english'. Their topics
+            # carry a prefix, which tells us the true channel.
+            try:
+                conn.execute("UPDATE ab_title_tests SET channel = 'hindi' "
+                             "WHERE channel = 'english' AND substr(topic, 1, 5) = '[HI] '")
+                conn.execute("UPDATE ab_title_tests SET channel = 'bhakti' "
+                             "WHERE channel = 'english' AND substr(topic, 1, 9) = '[BHAKTI] '")
+            except Exception as e:
+                print(f"ab_title_tests channel repair skipped: {e}")
+
     # ── Locks ─────────────────────────────────────────────────────────────
     # Used by scheduler.py / scheduler_hindi.py to avoid two overlapping
     # runs (e.g. a slow run still going when the next cron trigger fires)
