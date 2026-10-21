@@ -40,8 +40,10 @@ jobs:
           YOUTUBE_GAMING_TOKEN_B64: ${{ secrets.YOUTUBE_GAMING_TOKEN_B64 }}
           PYTHONUNBUFFERED: "1"
           GEMINI_TIMEOUT_SECONDS: "40"
-          GROQ_MAX_CALLS_PER_RUN: "14"
+          GROQ_MAX_CALLS_PER_RUN: "20"
           GAMING_JUDGE_PROVIDER: "gemini"
+          # Backup if Gemini is out of quota for a long time (weaker check, the writer model also judges):
+          # GAMING_JUDGE_PROVIDER: "router"
           GAMING_SCRIPT_MIN_SCORE: "6.5"
           GAMING_SOFT_FLOOR: "3.5"
           GAMING_ANALYZE_TOP_K: "2"
