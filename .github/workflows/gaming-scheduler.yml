@@ -42,6 +42,7 @@ jobs:
           GEMINI_TIMEOUT_SECONDS: "40"
           GROQ_MAX_CALLS_PER_RUN: "20"
           GAMING_JUDGE_PROVIDER: "gemini"
+          GAMING_JUDGE_ROUTER_FALLBACK: "1"
           # Backup if Gemini is out of quota for a long time (weaker check, the writer model also judges):
           # GAMING_JUDGE_PROVIDER: "router"
           GAMING_SCRIPT_MIN_SCORE: "6.5"
