@@ -614,6 +614,28 @@ def test_judge_does_not_fall_back_to_the_router_by_default(monkeypatch):
     assert "router" not in seen
 
 
+def test_judge_does_not_retry_when_gemini_quota_is_used_up(monkeypatch):
+    long_err = "429 RESOURCE_EXHAUSTED. " + "details " * 300
+    seen, _ = _judge_env(monkeypatch, [(None, long_err), ("g", None)])
+    with pytest.raises(RuntimeError) as exc:
+        script_quality_agent._invoke_judge("x")
+    assert seen == ["gemini"]                                 # one try only, no useless retry
+    assert len(str(exc.value)) < 300                          # short message, not a 2,000-char dump
+
+
+def test_judge_model_can_be_chosen_by_env(monkeypatch):
+    _judge_env(monkeypatch, [])
+    models = []
+    monkeypatch.setattr(llm, "_get_gemini", lambda *a, **k: (models.append(a), SimpleNamespace(invoke=lambda p: "g"))[1])
+    monkeypatch.setattr(llm, "_run_with_timeout", lambda fn, t: (fn(), None))             # really call the model factory
+    monkeypatch.setattr(script_quality_agent, "JUDGE_MODEL", "some-lite-model")
+    assert script_quality_agent._invoke_judge("x").content == "g"
+    assert models == [("some-lite-model",)]
+    monkeypatch.setattr(script_quality_agent, "JUDGE_MODEL", "")
+    script_quality_agent._invoke_judge("x")
+    assert models[-1] == ()                                                              # default model when unset
+
+
 def test_unavailable_gemini_judge_makes_script_unjudged_not_rejected(monkeypatch):
     _judge_env(monkeypatch, [])                               # Gemini always times out
     q = script_quality_agent.evaluate_script("He survived with 1 HP.", MOMENT, None, SUMMARY)
