@@ -43,6 +43,7 @@ jobs:
           GROQ_MAX_CALLS_PER_RUN: "14"
           GAMING_JUDGE_PROVIDER: "gemini"
           GAMING_SCRIPT_MIN_SCORE: "6.5"
+          GAMING_SOFT_FLOOR: "3.5"
           GAMING_ANALYZE_TOP_K: "2"
         run: python scheduler_gaming.py
 

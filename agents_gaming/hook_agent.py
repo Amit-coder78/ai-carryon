@@ -5,7 +5,7 @@ strongest. One LLM call proposes + self-scores; local rules then veto
 anything greeting-like, too long, AI-cliche, or containing an invented number.
 """
 from agents_gaming.v2_utils import (
-    clamp, extract_json, find_ai_phrases, ungrounded_numbers, word_count,
+    clamp, extract_json, find_ai_phrases, ungrounded_claims, ungrounded_numbers, word_count,
 )
 
 HOOK_TYPES = {
@@ -16,7 +16,11 @@ HOOK_TYPES = {
     "CHALLENGE": "dares the viewer to spot/predict/keep up with something",
 }
 MIN_WORDS, MAX_WORDS = 3, 14
-_BAD_START = ("hey", "hi ", "hello", "welcome", "what's up", "whats up", "guys", "today")
+_BAD_START = ("hey", "hi ", "hello", "welcome", "what's up", "whats up", "guys", "today",
+              # stock question openers the quality judge rejects every time
+              "what happens when", "what happens if", "what if", "can you", "can anyone",
+              "have you ever", "ever wondered", "guess what")
+QUESTION_PENALTY = 2.0   # the model scores its own questions high; the judge does not
 
 
 def _grounding_text(moment, summary):
@@ -34,6 +38,8 @@ def _valid(text, grounding):
     if text.lower().startswith(_BAD_START):
         return False
     if find_ai_phrases(text):
+        return False
+    if ungrounded_claims(text, grounding):      # e.g. "solo" when teammates are visible
         return False
     return not ungrounded_numbers(text, grounding)
 
@@ -69,7 +75,8 @@ Rules:
 - Tease the payoff, never give it away; no greetings; no "you won't believe", "watch what happens",
   "nobody expected", "insane moment", "absolutely incredible", "let's take a look"
 - Prefer a concrete statement or a specific detail over a generic question ("What if...", "What triggers...");
-  at most ONE of the five may be a question
+  at most ONE of the five may be a question, and never one that starts with "What happens when", "What if" or "Can you"
+- Never claim he/she is "solo" or "alone", or add teammates, odds or stakes, unless the data above says so
 - If the clip title contains a quote, catchphrase or the payoff itself, TEASE it — never repeat it in the hook
 - Use ONLY facts/numbers present above; write numbers as digits
 - Score each 1-10 for scroll-stopping power (be harsh; most hooks are 5-7)
@@ -105,6 +112,8 @@ def generate_hooks(moment, summary, recent_hook_types=None, feedback=None, avoid
         score = clamp(h.get("score"), 1, 10, default=5)
         if htype in recent:
             score -= 0.5  # light nudge away from repeating the last hook type
+        if text.endswith("?"):
+            score -= QUESTION_PENALTY  # statements beat questions with the judge
         candidates.append({"type": htype, "text": text, "score": round(score, 2)})
 
     if not candidates:

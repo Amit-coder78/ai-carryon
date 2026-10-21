@@ -13,7 +13,8 @@ Local guards run on every draft and trigger a regeneration:
     cuts the payoff)
 """
 from agents_gaming.v2_utils import (
-    clean_script, repeated_ai_phrases, ungrounded_numbers, word_count,
+    clean_script, repeated_ai_phrases, stage_directions, ungrounded_claims,
+    ungrounded_numbers, word_count,
 )
 
 import os
@@ -118,6 +119,9 @@ Rules:
   "absolutely incredible", "let's take a look", "watch what happens", "crazy gaming moment",
   "pure chaos", "losing his mind", "classic <name> energy", and any sign-off that just praises the clip
 - Never repeat a catchphrase or quote from the clip title more than once, and don't spoil it in line 1
+- Spoken words only: never describe what is on screen or write stage directions ("the banner flashes",
+  "he smirks"); the viewer already sees it
+- Never call him/her "solo" or "alone", and never add teammates, odds or stakes, unless the data above says so
 - Plain text only: no labels, no stage directions, no emojis, no hashtags
 
 Return ONLY the script, one thought per line."""
@@ -127,6 +131,9 @@ _SHORT_RULES = """- Do not repeat what the streamer says (see the clip data) and
 - Use ONLY facts and numbers from the data above; never invent kills, scores, ranks, names, or crowd/chat reactions
 - Avoid cliches: "you won't believe", "nobody expected", "this insane moment", "absolutely incredible",
   "let's take a look", "watch what happens", "pure chaos", "losing his mind", "classic <name> energy"
+- Spoken words only: never describe what is on screen or write stage directions ("the banner flashes",
+  "he smirks"); the viewer already sees it
+- Never call him/her "solo" or "alone", and never add teammates, odds or stakes, unless the data above says so
 - Plain text only: no labels, no stage directions, no emojis, no hashtags"""
 
 
@@ -177,6 +184,12 @@ def _local_issues(script, moment, hook, summary, recent_scripts, lo, hi):
     bad = ungrounded_numbers(script, grounding_text(moment, summary, hook))
     if bad:
         issues.append("numbers not in the clip data: " + ", ".join(bad))
+    claims = ungrounded_claims(script, grounding_text(moment, summary, hook))
+    if claims:
+        issues.append("claims not in the clip data: " + ", ".join(claims))
+    stage = stage_directions(script)
+    if stage:
+        issues.append("describes the screen instead of speaking (" + ", ".join(stage) + ")")
     return issues
 
 

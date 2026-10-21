@@ -93,6 +93,25 @@ def repeated_ai_phrases(text, recent_texts=None):
     return repeated
 
 
+# Claims the writer likes to invent. Only allowed when the clip data itself says it.
+_RISKY_CLAIM_WORDS = ("solo", "alone", "single-handedly", "one-man", "by himself", "by herself")
+_STAGE_DIRECTION_RE = re.compile(
+    r"\b(smirks?|grins?|smiles?|flashes|pops up|appears on screen|banner|camera (?:cuts|pans|zooms))\b",
+    re.I)
+
+
+def ungrounded_claims(text, source_text):
+    """Risky claim words (solo / alone / ...) used in `text` but absent from the clip data."""
+    low, src = (text or "").lower(), (source_text or "").lower()
+    return [w for w in _RISKY_CLAIM_WORDS
+            if re.search(r"\b" + re.escape(w) + r"\b", low) and not re.search(r"\b" + re.escape(w) + r"\b", src)]
+
+
+def stage_directions(text):
+    """Lines that describe what is on screen ('Ace banner flashes, he smirks') instead of being spoken."""
+    return sorted({m.group(0).lower() for m in _STAGE_DIRECTION_RE.finditer(text or "")})
+
+
 def clamp(value, lo, hi, default=None):
     try:
         v = float(value)

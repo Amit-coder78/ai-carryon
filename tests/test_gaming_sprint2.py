@@ -550,7 +550,7 @@ def _v2(monkeypatch, sched, record, passed=True):
     _wire(monkeypatch, sched, clips)
     monkeypatch.setattr(tra, "transcribe_clip", lambda path: {"text": "oh my god he did it", "segments": []})
 
-    def fake_script(clip, m, sm, st, db=None, mode=None):
+    def fake_script(clip, m, sm, st, db=None, mode=None, **kw):
         record["script_args"] = {"summary": sm, "mode": mode, "key": m["key_timestamp"]}
         return {"script": "He had 1 HP.\nThree pushed him.\nIce cold.", "passed": passed,
                 "hook": {"type": "SHOCK", "text": "He had 1 HP."}, "quality": None}

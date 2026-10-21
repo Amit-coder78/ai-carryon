@@ -196,7 +196,7 @@ def test_hook_returns_none_on_llm_failure_or_garbage(monkeypatch):
 
 def test_hook_nudges_away_from_last_type(monkeypatch):
     hooks = {"hooks": [{"type": "SHOCK", "text": "He survived with 1 HP.", "score": 8},
-                       {"type": "CURIOSITY", "text": "How is he still alive?", "score": 7.8}]}
+                       {"type": "CURIOSITY", "text": "Something is off about the third player.", "score": 7.8}]}
     _fake_llm(monkeypatch, [json.dumps(hooks)])
     assert hook_agent.generate_hooks(MOMENT, SUMMARY, recent_hook_types=["SHOCK"])["type"] == "CURIOSITY"
 
@@ -572,31 +572,93 @@ def test_hook_agent_excludes_avoided_hooks(monkeypatch):
     assert best["type"] == "STORY"
 
 
-def test_judge_is_pinned_to_gemini_with_its_own_timeout_and_falls_back(monkeypatch):
+def _judge_env(monkeypatch, gemini_results):
+    """gemini_results: list of (resp, err) tuples consumed per Gemini try; the router is tracked."""
     seen, timeouts = [], []
     monkeypatch.setattr(llm, "_provider_dead", lambda n: False)
     monkeypatch.setattr(llm, "_record_outcome", lambda *a: None)
-    monkeypatch.setattr(llm, "_get_gemini", lambda *a, **k: SimpleNamespace(
-        invoke=lambda p: (seen.append("gemini"), SimpleNamespace(content="g"))[1]))
+    monkeypatch.setattr(llm, "_get_gemini", lambda *a, **k: SimpleNamespace(invoke=lambda p: None))
     monkeypatch.setattr(llm, "safe_invoke", lambda p, *a, **k: (seen.append("router"), SimpleNamespace(content="r"))[1])
-    real_run = llm._run_with_timeout
-    monkeypatch.setattr(llm, "_run_with_timeout", lambda fn, t: (timeouts.append(t), real_run(fn, t))[1])
+    results = list(gemini_results)
+
+    def fake_run(fn, t):
+        timeouts.append(t)
+        seen.append("gemini")
+        return results.pop(0) if results else (None, "timed out")
+
+    monkeypatch.setattr(llm, "_run_with_timeout", fake_run)
+    monkeypatch.setattr(llm, "_normalize_response", lambda r: SimpleNamespace(content=r))
+    return seen, timeouts
+
+
+def test_judge_is_pinned_to_gemini_with_its_own_timeout(monkeypatch):
+    seen, timeouts = _judge_env(monkeypatch, [("g", None)])
     assert script_quality_agent._invoke_judge("x").content == "g" and seen == ["gemini"]
     assert timeouts == [script_quality_agent.JUDGE_TIMEOUT_SECONDS] and timeouts[0] > 15   # not the router's 15s
 
-    seen.clear()
-    monkeypatch.setattr(llm, "_run_with_timeout", lambda fn, t: (None, "timed out"))        # Gemini fails
-    assert script_quality_agent._invoke_judge("x").content == "r" and seen == ["router"]
 
-    seen.clear()
-    monkeypatch.setattr(llm, "_provider_dead", lambda n: True)                                 # Gemini circuit open
-    assert script_quality_agent._invoke_judge("x").content == "r" and seen == ["router"]
+def test_judge_retries_gemini_once_then_succeeds(monkeypatch):
+    seen, _ = _judge_env(monkeypatch, [(None, "timed out"), ("g", None)])
+    assert script_quality_agent._invoke_judge("x").content == "g"
+    assert seen == ["gemini", "gemini"]                      # retried Gemini, never touched the router
 
+
+def test_judge_does_not_fall_back_to_the_router_by_default(monkeypatch):
+    seen, _ = _judge_env(monkeypatch, [(None, "timed out"), (None, "timed out")])
+    with pytest.raises(RuntimeError):
+        script_quality_agent._invoke_judge("x")
+    assert "router" not in seen
+    monkeypatch.setattr(llm, "_provider_dead", lambda n: True)                              # circuit open
+    with pytest.raises(RuntimeError):
+        script_quality_agent._invoke_judge("x")
+    assert "router" not in seen
+
+
+def test_unavailable_gemini_judge_makes_script_unjudged_not_rejected(monkeypatch):
+    _judge_env(monkeypatch, [])                               # Gemini always times out
+    q = script_quality_agent.evaluate_script("He survived with 1 HP.", MOMENT, None, SUMMARY)
+    assert q["unjudged"] and not q["passed"]                  # scheduler skips the cycle, clip is not burned
+
+
+def test_judge_router_fallback_is_opt_in(monkeypatch):
+    seen, _ = _judge_env(monkeypatch, [(None, "timed out"), (None, "timed out")])
+    monkeypatch.setattr(script_quality_agent, "JUDGE_ROUTER_FALLBACK", True)
+    assert script_quality_agent._invoke_judge("x").content == "r" and seen[-1] == "router"
     seen.clear()
-    monkeypatch.setattr(llm, "_provider_dead", lambda n: False)
     monkeypatch.setattr(script_quality_agent, "JUDGE_PROVIDER", "router")
     script_quality_agent._invoke_judge("x")
     assert seen == ["router"]
+
+
+def test_hook_question_is_penalised_and_stock_openers_rejected(monkeypatch):
+    hooks = {"hooks": [
+        {"type": "CURIOSITY", "text": "Can he hold the site with a rifle?", "score": 9},          # question: -2
+        {"type": "STORY", "text": "Three players are pushing him.", "score": 8},
+        {"type": "CHALLENGE", "text": "What happens when he runs out of room?", "score": 10},   # stock opener
+        {"type": "REACTION", "text": "Can you keep up with this?", "score": 10},                 # stock opener
+    ]}
+    _fake_llm(monkeypatch, [json.dumps(hooks)])
+    best = hook_agent.generate_hooks(MOMENT, SUMMARY)
+    assert best["type"] == "STORY"
+    assert [c["type"] for c in best["candidates"]] == ["STORY", "CURIOSITY"]
+
+
+def test_hook_rejects_solo_claim_not_in_data(monkeypatch):
+    hooks = {"hooks": [{"type": "STORY", "text": "He holds the site solo.", "score": 9},
+                       {"type": "SHOCK", "text": "Three players are pushing him.", "score": 6}]}
+    _fake_llm(monkeypatch, [json.dumps(hooks)])
+    assert hook_agent.generate_hooks(MOMENT, SUMMARY)["type"] == "SHOCK"
+    assert v2_utils.ungrounded_claims("He holds it solo", "he plays solo queue") == []      # allowed when in the data
+
+
+def test_commentary_flags_stage_directions_and_invented_solo(monkeypatch):
+    issues = commentary_agent._local_issues("Ace banner flashes, he smirks.\nHe holds B alone.",
+                                            MOMENT, None, SUMMARY, [], 1, 50)
+    assert any("describes the screen" in i for i in issues)
+    assert any("claims not in the clip data" in i for i in issues)
+    p = commentary_agent._build_prompt(MOMENT, None, SUMMARY, {}, "hype", 40, 60, None)
+    assert "stage directions" in p and '"solo" or "alone"' in p
+    assert '"solo" or "alone"' in commentary_agent._build_short_prompt(MOMENT, None, SUMMARY, "hype", 9, 20, None)
 
 
 def test_pauses_off_by_default_and_opt_in(monkeypatch):

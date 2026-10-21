@@ -58,15 +58,32 @@ ALLOW_UNJUDGED = os.getenv("GAMING_ALLOW_UNJUDGED", "0") == "1"
 JUDGE_PARSE_RETRIES = 1
 
 
+# The judge must stay on ONE scale. A Gemini timeout used to hand the judging to the router (Groq),
+# which scores far more leniently, so the same script could pass or fail depending on which judge
+# happened to answer. Default: retry Gemini, and if it still fails treat the script as UNJUDGED
+# (the scheduler then skips the cycle and keeps its saved work) instead of judging on another scale.
+# GAMING_JUDGE_ROUTER_FALLBACK=1 restores the old fall-back-to-router behaviour.
+JUDGE_ROUTER_FALLBACK = os.getenv("GAMING_JUDGE_ROUTER_FALLBACK", "0") == "1"
+JUDGE_GEMINI_RETRIES = int(os.getenv("GAMING_JUDGE_GEMINI_RETRIES", "1"))
+
+
 def _invoke_judge(prompt):
     import agents.model_invoke_agent_english as llm
-    if JUDGE_PROVIDER == "gemini" and not llm._provider_dead("gemini"):
-        print("[gaming judge] Trying Gemini")
-        resp, err = llm._run_with_timeout(lambda: llm._get_gemini().invoke(prompt), JUDGE_TIMEOUT_SECONDS)
-        llm._record_outcome("gemini", resp is not None)
-        if resp is not None:
-            return llm._normalize_response(resp)
-        print(f"[gaming judge] Gemini failed: {err} — falling back to the router")
+    if JUDGE_PROVIDER == "gemini":
+        err = "circuit breaker open"
+        if not llm._provider_dead("gemini"):
+            for n in range(1 + JUDGE_GEMINI_RETRIES):
+                print("[gaming judge] Trying Gemini" + (f" (retry {n})" if n else ""))
+                resp, err = llm._run_with_timeout(lambda: llm._get_gemini().invoke(prompt), JUDGE_TIMEOUT_SECONDS)
+                llm._record_outcome("gemini", resp is not None)
+                if resp is not None:
+                    return llm._normalize_response(resp)
+                print(f"[gaming judge] Gemini failed: {err}")
+                if llm._provider_dead("gemini"):
+                    break
+        if not JUDGE_ROUTER_FALLBACK:
+            raise RuntimeError(f"Gemini judge unavailable ({err}); not judging on a different model")
+        print("[gaming judge] falling back to the router (GAMING_JUDGE_ROUTER_FALLBACK=1)")
     return llm.safe_invoke(prompt)
 
 
