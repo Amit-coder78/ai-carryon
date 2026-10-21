@@ -100,6 +100,46 @@ def remember_script(db, script, hook_type=None):
         print(f"Could not store recent script memory: {e}")
 
 
+# Last resort when every narrated draft fails the quality bar: publish the clip with ONLY the hook
+# (the streamer's own audio tells the story). The hook is judged on its own and must be accurate.
+# Off by default here; the gaming workflow turns it on with GAMING_HOOK_ONLY_FALLBACK=1.
+HOOK_ONLY_FALLBACK = os.getenv("GAMING_HOOK_ONLY_FALLBACK", "0") == "1"
+HOOK_ONLY_MIN_ACCURACY = float(os.getenv("GAMING_HOOK_ONLY_MIN_ACCURACY", "7"))
+HOOK_ONLY_MAX_TRIES = int(os.getenv("GAMING_HOOK_ONLY_MAX_TRIES", "2"))
+
+
+def _hook_only_fallback(hook_hist, moment, summary, recent_scripts, mode):
+    """Try the most accurate hooks seen in this run as a one-line script.
+    Returns a passed result, an {"unjudged": True} result when no judge is available, or None."""
+    from agents_gaming.script_quality_agent import evaluate_script
+    ranked = sorted(
+        (h for h in hook_hist if (h.get("hook") or {}).get("text")),
+        key=lambda h: (h.get("accuracy") is not None, h.get("accuracy") or 0,
+                       (h["hook"].get("score") or 0)),
+        reverse=True)
+    seen, tried = set(), 0
+    for h in ranked:
+        text = h["hook"]["text"].strip()
+        if text.lower() in seen:
+            continue
+        if tried >= HOOK_ONLY_MAX_TRIES:
+            break
+        seen.add(text.lower())
+        tried += 1
+        quality = evaluate_script(text, moment, h["hook"], summary, recent_scripts, mode=mode)
+        if quality.get("unjudged"):
+            print("Hook-only fallback: judge unavailable - not publishing an unreviewed hook")
+            return {"script": text, "hook": h["hook"], "quality": quality, "attempts": tried,
+                    "passed": False, "fallback": False, "unjudged": True}
+        accuracy = (quality.get("scores") or {}).get("accuracy")
+        print(f"Hook-only check {tried}: '{text}' accuracy={accuracy} (needs >= {HOOK_ONLY_MIN_ACCURACY})")
+        if accuracy is not None and accuracy >= HOOK_ONLY_MIN_ACCURACY:
+            print("Hook-only fallback: publishing the clip with just the hook")
+            return {"script": text, "hook": h["hook"], "quality": quality, "attempts": tried,
+                    "passed": True, "fallback": False, "hook_only": True}
+    return None
+
+
 def create_gaming_script_v2(clip, moment, summary, structured, db=None, mode="full", state=None):
     """V2 script pipeline for one analysed clip.
 
@@ -140,6 +180,15 @@ def create_gaming_script_v2(clip, moment, summary, structured, db=None, mode="fu
 
     feedback, last, best = saved.get("feedback"), None, None
     used_hooks = list(saved.get("used_hooks") or ([hook["text"]] if hook else []))
+    hook_hist = list(saved.get("hook_hist") or [])      # [{"hook": {...}, "accuracy": n}] for the hook-only fallback
+
+    def _give_up(result):
+        if HOOK_ONLY_FALLBACK:
+            alt = _hook_only_fallback(hook_hist, moment, summary, recent_scripts, mode)
+            if alt:
+                return alt
+        return result
+
     first_attempt = int(saved.get("attempt") or 1)
     for attempt in range(first_attempt, MAX_SCRIPT_ATTEMPTS + 1):
         try:
@@ -167,6 +216,10 @@ def create_gaming_script_v2(clip, moment, summary, structured, db=None, mode="fu
                     "passed": False, "fallback": False, "unjudged": True}
         s = quality["scores"]
         print(f"Script attempt {attempt}: passed={quality['passed']} scores={s} issues={quality['issues']}")
+        if hook:
+            hook_hist.append({"hook": {k: hook.get(k) for k in ("type", "text", "score")},
+                              "accuracy": s.get("accuracy")})
+            _save(hook_hist=list(hook_hist))
         cand = {"script": script, "hook": hook, "quality": quality, "attempts": attempt,
                 "passed": quality["passed"], "fallback": False}
         if quality["passed"]:
@@ -177,7 +230,7 @@ def create_gaming_script_v2(clip, moment, summary, structured, db=None, mode="fu
         if attempt >= 2 and average_score(best["quality"]["scores"]) < EARLY_STOP_AVG:
             print(f"Best draft averages {average_score(best['quality']['scores']):.1f} "
                   f"(< {EARLY_STOP_AVG}) — stopping early to save LLM calls")
-            return best
+            return _give_up(best)
         feedback = quality["feedback"] or "; ".join(quality["issues"])
         _save(attempt=attempt + 1, draft=None, feedback=feedback, hook=hook, used_hooks=used_hooks)
         # The hook is generated once and forced in as line 1, so rewriting the
@@ -193,4 +246,4 @@ def create_gaming_script_v2(clip, moment, summary, structured, db=None, mode="fu
 
     final = dict(best or last)          # every attempt failed the bar -> passed=False (best draft, for logging)
     final["attempts"] = MAX_SCRIPT_ATTEMPTS
-    return final
+    return _give_up(final)

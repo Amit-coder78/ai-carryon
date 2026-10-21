@@ -572,6 +572,59 @@ def test_hook_agent_excludes_avoided_hooks(monkeypatch):
     assert best["type"] == "STORY"
 
 
+def _hook_only_route(state, accuracies, hook_only_error=False):
+    """Hooks: HOOKS_JSON then HOOKS2_JSON. Judge call n returns bad scores + accuracies[n]."""
+    def route(prompt):
+        if "first 2 seconds" in prompt:
+            state["hooks"] += 1
+            return HOOKS_JSON if state["hooks"] == 1 else HOOKS2_JSON
+        if "strict editor" in prompt:
+            state["judge"] += 1
+            n = state["judge"]
+            if hook_only_error and n >= 3:
+                raise RuntimeError("judge down")
+            acc = accuracies[min(n - 1, len(accuracies) - 1)]
+            return _judge(hook=3, naturalness=2, originality=2, accuracy=acc, moment_relevance=4)
+        return GOOD
+    return route
+
+
+def test_hook_only_fallback_publishes_the_most_accurate_hook(monkeypatch):
+    state = {"hooks": 0, "judge": 0}
+    monkeypatch.setattr(script_agent, "HOOK_ONLY_FALLBACK", True)
+    _fake_llm(monkeypatch, [_hook_only_route(state, [6, 9, 8])])    # drafts: acc 6 and 9, hook-only check: 8
+    out = script_agent.create_gaming_script_v2({"duration": 25}, MOMENT, SUMMARY, {}, db=FakeDB())
+    assert out["passed"] and out["hook_only"]
+    assert out["script"] == "One HP left and three pushing him."    # hook of the most accurate draft
+    assert out["hook"]["text"] == out["script"]
+    assert state["judge"] == 3                                      # 2 draft judgements + 1 hook-only check
+
+
+def test_hook_only_fallback_is_off_by_default_in_code(monkeypatch):
+    state = {"hooks": 0, "judge": 0}
+    monkeypatch.setattr(script_agent, "HOOK_ONLY_FALLBACK", False)
+    _fake_llm(monkeypatch, [_hook_only_route(state, [6, 9, 9])])
+    out = script_agent.create_gaming_script_v2({"duration": 25}, MOMENT, SUMMARY, {}, db=FakeDB())
+    assert not out["passed"] and not out.get("hook_only")
+
+
+def test_hook_only_fallback_rejects_an_inaccurate_hook(monkeypatch):
+    state = {"hooks": 0, "judge": 0}
+    monkeypatch.setattr(script_agent, "HOOK_ONLY_FALLBACK", True)
+    _fake_llm(monkeypatch, [_hook_only_route(state, [6, 9, 5, 5])])  # both hook-only checks score accuracy 5
+    out = script_agent.create_gaming_script_v2({"duration": 25}, MOMENT, SUMMARY, {}, db=FakeDB())
+    assert not out["passed"] and not out.get("hook_only")
+    assert state["judge"] == 4                                      # 2 drafts + 2 hook-only checks, then stops
+
+
+def test_hook_only_fallback_never_publishes_unreviewed(monkeypatch):
+    state = {"hooks": 0, "judge": 0}
+    monkeypatch.setattr(script_agent, "HOOK_ONLY_FALLBACK", True)
+    _fake_llm(monkeypatch, [_hook_only_route(state, [6, 9], hook_only_error=True)])
+    out = script_agent.create_gaming_script_v2({"duration": 25}, MOMENT, SUMMARY, {}, db=FakeDB())
+    assert out.get("unjudged") and not out["passed"]                # scheduler returns judge_unavailable
+
+
 def _judge_env(monkeypatch, gemini_results):
     """gemini_results: list of (resp, err) tuples consumed per Gemini try; the router is tracked."""
     seen, timeouts = [], []
