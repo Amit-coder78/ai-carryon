@@ -1,6 +1,6 @@
 """Minimal LLM client for Finance: Groq primary, Gemini fallback (models per README). stdlib only.
 Swap `invoke` for the shared routing layer once its signature is confirmed; Finance code only needs prompt->str."""
-import json, os, urllib.request
+import json, os, urllib.error, urllib.request
 
 GROQ_MODEL = os.getenv("FINANCE_GROQ_MODEL", "openai/gpt-oss-120b")
 GEMINI_MODEL = os.getenv("FINANCE_GEMINI_MODEL", "gemini-3.5-flash")
@@ -12,8 +12,12 @@ class LLMError(RuntimeError):
 
 def _post(url, payload, headers, timeout=60):
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json", "User-Agent": "ai-carryon-finance/1.0", **headers})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")[:300]
+        raise urllib.error.HTTPError(e.url, e.code, f"{e.reason}: {body}", e.headers, None) from None
 
 
 def invoke(prompt, system="", temperature=0.4, max_tokens=1500, post=_post, env=None):
