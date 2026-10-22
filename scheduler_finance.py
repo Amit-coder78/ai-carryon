@@ -113,6 +113,8 @@ def _run(settings, deps):
             for e in errs: print("Research feed error:", e)
         topic = select_topic(settings, items, store.posted_ids())
         if topic is None:
+            print(f"No unused topic for {settings.content_type}/{settings.category}: every title is already in finance_posted "
+                  "(or news/analytical had nothing fresh). Try another FINANCE_CATEGORY or add titles to EVERGREEN.")
             return {"status": "no_grounded_topic"}
         state.begin({"topic": topic.to_dict()})
     print(f"Processing ({topic.content_type}/{topic.category}): {topic.title}")

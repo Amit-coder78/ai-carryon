@@ -179,7 +179,7 @@ class TestResearchAndTopics(unittest.TestCase):
 
     def test_evergreen_never_repeats_and_exhausts(self):
         st, seen = S(category="investing"), set()
-        for _ in range(3):
+        for _ in range(len(topics.EVERGREEN["investing"])):
             t = topics.select_topic(st, [], seen, NOW); self.assertIsNotNone(t); seen.add(t.id)
         self.assertIsNone(topics.select_topic(st, [], seen, NOW))
 
@@ -239,6 +239,16 @@ class TestScriptAndScenes(unittest.TestCase):
     def test_metadata_fixes_phonetic_sensex(self):
         from agents_finance.metadata import _clean
         self.assertEqual(_clean("Sense\u202fx vs Nifty"), "Sensex vs Nifty")
+
+    def test_evergreen_topics_are_sound(self):
+        from agents_finance.fact_checker import find_banned
+        for cat, titles in topics.EVERGREEN.items():
+            self.assertGreaterEqual(len(titles), 12, cat)
+            slugs = [topics.slug(t) for t in titles]
+            self.assertEqual(len(slugs), len(set(slugs)), f"duplicate topic in {cat}")
+            for t in titles:
+                self.assertLessEqual(len(t), 90, t)
+                self.assertEqual(find_banned(t), [], t)
 
     def test_scene_planning(self):
         sc = scene_planner.plan_scenes(GOOD, self.facts, self.topic, self.settings, ["savings jar", "ACME Corp logo", "price 500"])

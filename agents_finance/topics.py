@@ -23,6 +23,86 @@ EVERGREEN = {
 }
 
 
+# More evergreen explainers per category, so a daily schedule does not run dry after three videos.
+# Conceptual only (no live numbers, no advice); every script still goes through the fact-checker.
+_MORE_EVERGREEN = {
+    "indian_markets": [
+        "What the India VIX measures", "How circuit breakers work on Indian exchanges",
+        "How settlement works after you buy a share", "Large, mid and small cap: what the labels mean",
+        "How an index is rebalanced", "Why trading volume matters", "What the bid and ask price mean",
+        "What a stock split does and does not change", "Dividends explained: record date and ex-date"],
+    "global_markets": [
+        "What the US Federal Reserve does and why markets watch it", "How the dollar-rupee exchange rate moves",
+        "Why oil prices ripple through stock markets", "What emerging markets means to investors",
+        "How foreign portfolio investors affect Indian markets", "What a recession is and how markets react",
+        "Why global cues shape the Indian market open", "Why gold behaves differently from stocks",
+        "How trade tensions can move markets"],
+    "company_analysis": [
+        "How to read a balance sheet in plain terms", "Return on equity: what it tells you",
+        "Why promoter holding is worth reading", "Earnings per share: what it measures",
+        "Reading a quarterly result without the noise", "What operating margin shows about a business",
+        "Book value versus market price", "Why revenue growth alone can mislead",
+        "How to compare two companies in the same sector"],
+    "ipo": [
+        "What an anchor investor is in an IPO", "How IPO allotment works",
+        "Retail, institutional and high-net-worth quotas in an IPO", "What lock-in periods mean after an IPO",
+        "Fresh issue versus offer for sale", "What a red herring prospectus is",
+        "Why valuation matters before you apply for an IPO", "What oversubscription means",
+        "How a company gets listed on an exchange"],
+    "technical_analysis": [
+        "Moving averages: what they smooth out", "What trading volume adds to a chart",
+        "RSI explained: what overbought and oversold mean", "Trend lines: how traders draw them and their limits",
+        "Why indicators lag price", "Chart patterns: why they often fail",
+        "Timeframes: why the same chart looks different", "Risk management comes before chart reading",
+        "What backtesting can and cannot tell you"],
+    "derivatives": [
+        "What lot size means in futures and options", "How time decay works for option buyers",
+        "What margin means in futures trading", "Hedging explained: options as insurance",
+        "Strike price and moneyness in simple terms", "What implied volatility tells you",
+        "Futures versus options: the key differences", "What happens on expiry day",
+        "The risk profile of selling options"],
+    "investing": [
+        "Asset allocation: stocks, bonds and gold", "What risk tolerance really means",
+        "Rebalancing a portfolio, explained", "Why starting early matters more than starting big",
+        "Inflation and why cash loses value over time", "Rupee cost averaging in plain words",
+        "How a goal timeline changes the way you invest", "Why costs and taxes quietly shape returns",
+        "How to think about a long-term financial goal"],
+    "mutual_funds_etfs": [
+        "Active versus passive funds", "What a fund's exit load is", "Direct versus regular plans",
+        "How ETFs trade differently from mutual funds", "What the riskometer on a fund shows",
+        "Debt funds versus equity funds", "What tracking error means for index funds",
+        "How to read a fund factsheet", "What a fund manager actually does"],
+    "macro": [
+        "What GDP growth means for investors", "What the repo rate is", "Why a falling rupee affects imports and markets",
+        "What the fiscal deficit is", "Why inflation data moves markets", "What the yield curve says",
+        "How rate changes reach your loan EMI", "What the current account deficit means",
+        "Why the monsoon matters to the Indian economy"],
+    "news": [
+        "What a company's stock exchange filing is", "How to check where a news claim comes from",
+        "What priced in means", "Why one headline rarely changes a long-term plan",
+        "How analyst ratings and target prices work", "What bulk deals and block deals are",
+        "How to read a market wrap", "What an earnings call reveals", "Why headline numbers need context"],
+    "sectors": [
+        "How the banking sector earns money", "What drives IT sector earnings", "How the pharma sector is different",
+        "Why FMCG is called defensive", "How auto sales cycles work", "What a public sector company is",
+        "Sector rotation explained", "How commodity prices affect metal and energy sectors",
+        "Why real estate is sensitive to interest rates"],
+    "history": [
+        "The 1929 crash and the Great Depression in simple terms", "How SEBI came to regulate Indian markets",
+        "The story of the Bombay Stock Exchange", "Black Monday of 1987", "The Dutch tulip mania",
+        "What the collapse of Long-Term Capital Management taught markets", "The 2020 market crash and recovery",
+        "How dematerialisation changed investing in India", "The story of the NSE and the Nifty"],
+    "psychology_personal_finance": [
+        "Loss aversion: why losses feel bigger than gains", "Why checking your portfolio daily can hurt",
+        "FOMO and chasing last year's winners", "How to build a budget you can keep",
+        "Needs versus wants in a monthly budget", "Why insurance comes before investing",
+        "Anchoring: why your purchase price misleads you", "Overconfidence and why diversification protects you",
+        "How to think about paying off debt versus investing"],
+}
+for _k, _titles in _MORE_EVERGREEN.items():
+    EVERGREEN[_k] = EVERGREEN[_k] + _titles
+
+
 def slug(s):
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")[:60]
 
