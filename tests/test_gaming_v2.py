@@ -15,6 +15,11 @@ from agents_gaming import script_agent, script_quality_agent, v2_utils
 NOW = datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)
 
 
+def _write(path, data, mode="wb"):
+    with open(path, mode) as f:
+        f.write(data)
+
+
 def _clip(cid, views, age_h, title="a clip", game="g1", dur=25, kind="top_game", who="x"):
     return {"id": cid, "view_count": views, "duration": dur, "title": title, "game_id": game,
             "broadcaster_name": who, "_topic_type": kind,
@@ -391,7 +396,7 @@ def _wire(monkeypatch, s, clips, quality_pass=True, unjudged=False, non_gameplay
     import agents_gaming.video_clip_agent as vca
     monkeypatch.setattr(ta, "FOLLOWED_STREAMERS", [])
     monkeypatch.setattr(vca, "download_twitch_clip",
-                        lambda c, out: (open(out, "wb").write(b"x"), out)[1])
+                        lambda c, out: (_write(out, b"x"), out)[1])
     seen = []
 
     def fake_analyze(c, p):
