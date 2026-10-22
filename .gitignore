@@ -48,3 +48,4 @@ assets/hook_clips/
 *token*.json
 client_secret*.json
 !assets/**
+output/
