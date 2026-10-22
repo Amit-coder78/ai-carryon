@@ -33,6 +33,9 @@ ABSTRACT = {"animated", "animation", "animations", "icon", "icons", "flowchart",
             "infographics", "diagram", "diagrams", "representing", "concept", "abstract", "illustration"}
 
 
+HINT_BLOCK = {"graphic", "graphics", "showing", "highlighting", "simple", "visual", "visuals"}
+
+
 def is_generic(term, forbidden):
     toks = set(re.findall(r"[a-z0-9]+", term.lower()))
     bad = {t for f in forbidden for t in re.findall(r"[a-z0-9]+", str(f).lower())}
@@ -57,7 +60,8 @@ def plan_scenes(template, facts, topic, settings, visual_hints=()):
     n = max(3, round(settings.duration_sec / (6 if settings.video_format == "shorts" else 12)))
     groups = _group(sentences, min(n, len(sentences)))
     forbidden = list(topic.entity_terms) + [topic.ticker]
-    hints = [h for h in visual_hints if is_generic(h, forbidden)]
+    hints = [h for h in visual_hints
+             if is_generic(h, forbidden) and len(h.split()) <= 4 and not (set(h.lower().split()) & HINT_BLOCK)]
     pool = list(dict.fromkeys(list(cat.stock_terms) + hints))
 
     scenes, total_words = [], 0
