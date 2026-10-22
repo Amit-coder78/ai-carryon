@@ -42,7 +42,7 @@ def generate_script(topic, facts, settings, invoke, now=None):
             feedback, last = f"Output was not valid JSON with a 'narration' string ({e}).", f"parse error: {e}"
             continue
         words = len(template.split())
-        max_words = round(target_words * 1.10)
+        max_words = max(round(target_words * 1.10), target_words + 12)
         if words > max_words:
             feedback = f"- too_long: narration is {words} words but must be at most {max_words} (target {target_words}). Cut it down; keep only the key points."
             last = f"too long: {words} > {max_words} words"

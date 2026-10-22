@@ -29,10 +29,14 @@ class Scene:
     def from_dict(cls, d): return cls(**d)
 
 
+ABSTRACT = {"animated", "animation", "animations", "icon", "icons", "flowchart", "infographic",
+            "infographics", "diagram", "diagrams", "representing", "concept", "abstract", "illustration"}
+
+
 def is_generic(term, forbidden):
     toks = set(re.findall(r"[a-z0-9]+", term.lower()))
     bad = {t for f in forbidden for t in re.findall(r"[a-z0-9]+", str(f).lower())}
-    return bool(toks) and not (toks & bad) and not re.search(r"\d", term)
+    return bool(toks) and not (toks & bad) and not (toks & ABSTRACT) and not re.search(r"\d", term)
 
 
 def _group(sentences, n):

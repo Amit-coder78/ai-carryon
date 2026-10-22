@@ -1,7 +1,6 @@
 .env
 token.pickle
 client_secrets.json
-output/
 assets/backgrounds/
 __pycache__/
 *.pyc
@@ -9,7 +8,6 @@ __pycache__/
 SadTalker/
 media/
 assets/flow_clips/
-output/
 *.json
 !requirements.txt
 .env.save
@@ -33,7 +31,6 @@ token_hindi.json
 federated-unlearning/
 *.patch
 assets/gaming_clips/
-output/
 cricket_token_b64.txt
 assets/pexels_clips/
 assets/thumbnails/
@@ -47,8 +44,6 @@ assets/hook_clips/
 *.wav
 *.mp4
 *.mp3
-view_history.json
-output/
 .env
 *token*.json
 client_secret*.json
