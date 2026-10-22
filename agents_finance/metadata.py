@@ -1,6 +1,15 @@
 """Stage 10: titles, description, tags, thumbnail concept, source list."""
+import re
 from .fact_checker import find_banned
 from .facts import facts_by_id, referenced_ids
+
+_SENSEX = re.compile(r"\bSense[\s\u00a0\u202f]+x\b", re.I)
+
+
+def _clean(t):
+    """Displayed text only: normalise odd spaces and fix the phonetic spelling 'Sense x' -> 'Sensex'."""
+    return _SENSEX.sub("Sensex", t.replace("\u202f", " ").replace("\u00a0", " "))
+
 
 DISCLAIMER = ("Educational content only, not investment advice. Investing and trading involve risk, including loss of capital. "
               "Do your own research and consult a SEBI-registered adviser before making decisions.")
@@ -11,6 +20,7 @@ def build_metadata(topic, script, facts, settings):
     used = [fmap[i] for i in dict.fromkeys(referenced_ids(script.template))]
     title = next((t for t in script.title_ideas if t and len(t) <= 90 and not find_banned(t)), topic.title)
     if find_banned(title) or len(title) > 90: title = topic.title[:90]
+    title = _clean(title)
     srcs, seen = [], set()
     for f in used:
         if f.source_url and f.source_url not in seen:
@@ -19,7 +29,7 @@ def build_metadata(topic, script, facts, settings):
         if s["url"] not in seen:
             seen.add(s["url"]); srcs.append(f"- {s['title']}: {s['url']} (published {s['published_at'][:10]})")
     hypo = any(f.kind == "hypothetical" for f in used)
-    desc = [script.narration.split(". ")[0].rstrip(".") + ".", ""]
+    desc = [_clean(script.narration.split(". ")[0].rstrip(".")) + ".", ""]
     if hypo: desc += ["Figures marked as examples are hypothetical illustrations, not predictions.", ""]
     if srcs: desc += ["Sources:"] + srcs + [""]
     desc += [DISCLAIMER]

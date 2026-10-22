@@ -231,6 +231,15 @@ class TestScriptAndScenes(unittest.TestCase):
         with self.assertRaises(ScriptRejected):
             generate_script(self.topic, self.facts, self.settings, fake_invoke_factory([bad] * 3), now=NOW)
 
+    def test_scene_footage_queries_are_distinct(self):
+        sc = scene_planner.plan_scenes(GOOD, self.facts, self.topic, self.settings, [])
+        firsts = [s.search_terms[0] for s in sc if s.visual_type == "stock"]
+        self.assertEqual(len(firsts), len(set(firsts)))
+
+    def test_metadata_fixes_phonetic_sensex(self):
+        from agents_finance.metadata import _clean
+        self.assertEqual(_clean("Sense\u202fx vs Nifty"), "Sensex vs Nifty")
+
     def test_scene_planning(self):
         sc = scene_planner.plan_scenes(GOOD, self.facts, self.topic, self.settings, ["savings jar", "ACME Corp logo", "price 500"])
         self.assertAlmostEqual(sum(s.duration_sec for s in sc), 45, delta=1.0)

@@ -36,6 +36,10 @@ ABSTRACT = {"animated", "animation", "animations", "icon", "icons", "flowchart",
 HINT_BLOCK = {"graphic", "graphics", "showing", "highlighting", "simple", "visual", "visuals"}
 
 
+EXTRA_TERMS = ("business district skyline", "office workers laptop", "stock ticker display",
+               "calculator and notes", "city skyline night", "people walking city street")
+
+
 def is_generic(term, forbidden):
     toks = set(re.findall(r"[a-z0-9]+", term.lower()))
     bad = {t for f in forbidden for t in re.findall(r"[a-z0-9]+", str(f).lower())}
@@ -62,7 +66,8 @@ def plan_scenes(template, facts, topic, settings, visual_hints=()):
     forbidden = list(topic.entity_terms) + [topic.ticker]
     hints = [h for h in visual_hints
              if is_generic(h, forbidden) and len(h.split()) <= 4 and not (set(h.lower().split()) & HINT_BLOCK)]
-    pool = list(dict.fromkeys(list(cat.stock_terms) + hints))
+    pool = list(dict.fromkeys(list(cat.stock_terms) + hints + list(EXTRA_TERMS)))
+    used_terms = set()
 
     scenes, total_words = [], 0
     for g in groups:
@@ -86,7 +91,9 @@ def plan_scenes(template, facts, topic, settings, visual_hints=()):
             sc.chart = {"fact_id": series_fact.id, "title": series_fact.label, "series": series_fact.series,
                         "as_of": series_fact.as_of, "source": series_fact.source_title or series_fact.source_url}
         else:
-            sc.search_terms = [pool[i % len(pool)], pool[(i + 1) % len(pool)]]
+            fresh = [t for t in pool if t not in used_terms] or pool   # distinct footage per scene
+            sc.search_terms = fresh[:2]
+            used_terms.add(sc.search_terms[0])
         scenes.append(sc)
     if scenes:  # make estimated durations sum exactly to the target
         scenes[-1].duration_sec = round(scenes[-1].duration_sec + settings.duration_sec - sum(s.duration_sec for s in scenes), 1)
