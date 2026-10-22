@@ -14,6 +14,11 @@ VAR_NAMES = ["SARVAM_API_KEY"] + [
 ]
 
 
+def _write(path, data, mode="wb"):
+    with open(path, mode) as f:
+        f.write(data)
+
+
 class _FakeCommunicate:
     last = None
 
@@ -21,7 +26,7 @@ class _FakeCommunicate:
         _FakeCommunicate.last = {"text": text, "voice": voice, **kw}
 
     async def save(self, path):
-        open(path, "wb").write(b"fake")
+        _write(path, b"fake", "wb")
 
 
 class VoiceConfigTests(unittest.TestCase):

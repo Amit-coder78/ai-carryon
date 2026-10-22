@@ -15,6 +15,11 @@ from agents_finance.sources import SourceRecord, classify_tier
 NOW = datetime(2026, 10, 22, 12, 0, tzinfo=timezone.utc)
 
 
+def _write(path, data, mode="wb"):
+    with open(path, mode) as f:
+        f.write(data)
+
+
 def S(**kw):
     return FinanceSettings(**kw)
 
@@ -325,7 +330,7 @@ class TestLLMAndMedia(unittest.TestCase):
         stock = scene_planner.Scene(0, "a", 5, "stock", ["financial charts monitor"])
         chart = scene_planner.Scene(1, "b", 5, "chart", chart={"series": [["2026-10-20", 1], ["2026-10-21", 2]], "title": "t", "as_of": "2026-10-21", "source": "s"})
         made = []
-        def clip(q, out): open(out, "wb").write(b"x"); made.append(q)
+        def clip(q, out): _write(out, b"x", "wb"); made.append(q)
         def bad_chart(c, out): raise RuntimeError("no mpl")
         with tempfile.TemporaryDirectory() as d:
             paths, errs = fetch_scene_media([stock, chart], out_dir=os.path.join(d, "c"), clip_fn=clip, chart_fn=bad_chart)
@@ -375,10 +380,10 @@ class TestSchedulerEndToEnd(unittest.TestCase):
 
     def deps(self, outputs, store=None, provider=None):
         import scheduler_finance as sf
-        def voice(text, output_path): open(output_path, "wb").write(b"a")
-        def caps(text, audio_path): open("output/captions.srt", "w").write("1")
-        def video(use_pexels_clips, hook): open("output/final_video.mp4", "wb").write(b"v")
-        def clip(q, out): open(out, "wb").write(b"c")
+        def voice(text, output_path): _write(output_path, b"a", "wb")
+        def caps(text, audio_path): _write("output/captions.srt", "1", "w")
+        def video(use_pexels_clips, hook): _write("output/final_video.mp4", b"v", "wb")
+        def clip(q, out): _write(out, b"c", "wb")
         return sf.Deps(store=store or MemoryStore(), invoke=fake_invoke_factory(outputs), voice=voice, captions=caps,
                        video=video, clip_fn=clip, provider=provider or market_data.StooqProvider(fetch=lambda u: CSV))
 

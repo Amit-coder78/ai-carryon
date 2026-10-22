@@ -3,6 +3,11 @@ from agents_hindi.categories import (
 )
 
 
+def _write(path, data, mode="wb"):
+    with open(path, mode) as f:
+        f.write(data)
+
+
 def test_pick_category_avoids_last_one():
     for _ in range(50):
         assert pick_category(last_category="science") != "science"
@@ -134,7 +139,7 @@ def test_generate_clips_no_repeats_and_remembers(monkeypatch, tmp_path):
     pool = [_cand(i, f"https://www.pexels.com/video/a-b-clip-{i}/", query="a b")
             for i in (1, 2, 3, 4, 5)]
     monkeypatch.setattr(v, "search_candidates", lambda q, **k: list(pool))
-    monkeypatch.setattr(v, "_download", lambda c, path: open(path, "w").write("x"))
+    monkeypatch.setattr(v, "_download", lambda c, path: _write(path, "x", "w"))
     saved = {}
     monkeypatch.setattr(v, "_load_used_ids", lambda: [1])          # clip 1 used before
     monkeypatch.setattr(v, "_save_used_ids", lambda ids: saved.setdefault("ids", ids))
