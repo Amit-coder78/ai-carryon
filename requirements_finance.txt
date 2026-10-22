@@ -1,3 +1,4 @@
 # Finance-only additions. Add only what requirements.txt does not already provide.
 matplotlib>=3.8        # verified-data charts (agents_finance/charts.py)
 psycopg2-binary>=2.9   # only if the repo does not already ship a Postgres driver (psycopg v3 also works)
+edge-tts>=7.3.1
