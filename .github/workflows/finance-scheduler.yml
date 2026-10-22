@@ -1,0 +1,37 @@
+# Modelled on the repo's cron-workflow pattern (other workflows were not readable from here): verify against english-scheduler.yml.
+name: finance-scheduler
+on:
+  schedule:
+    - cron: "30 4 * * 1-5"      # 10:00 IST on weekdays (daily closes only, so one run per trading day is enough)
+  workflow_dispatch:
+    inputs:
+      category: { description: "FINANCE_CATEGORY", default: "indian_markets" }
+      content_type: { description: "educational | analytical | historical | news", default: "educational" }
+      ticker: { description: "FINANCE_TICKER (optional)", default: "" }
+      video_format: { description: "shorts | long", default: "shorts" }
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      FINANCE_FEEDS: ${{ vars.FINANCE_FEEDS }}
+      FINANCE_CATEGORY: ${{ inputs.category || vars.FINANCE_CATEGORY || 'indian_markets' }}
+      FINANCE_CONTENT_TYPE: ${{ inputs.content_type || vars.FINANCE_CONTENT_TYPE || 'educational' }}
+      FINANCE_TICKER: ${{ inputs.ticker || vars.FINANCE_TICKER }}
+      FINANCE_FORMAT: ${{ inputs.video_format || vars.FINANCE_FORMAT || 'shorts' }}
+      FINANCE_REQUIRE_REVIEW: ${{ vars.FINANCE_REQUIRE_REVIEW || 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pip install -r requirements.txt -r requirements_finance.txt
+      - run: python -m unittest tests.test_finance
+      - run: python scheduler_finance.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: finance-review, path: output/finance_review/, if-no-files-found: ignore }
