@@ -1,4 +1,5 @@
-# Modelled on the repo's cron-workflow pattern (other workflows were not readable from here): verify against english-scheduler.yml.
+# Finance scheduler. Review mode is the default (FINANCE_REQUIRE_REVIEW=true): nothing is uploaded, the bundle is saved as an artifact.
+# Live upload: set repo variable FINANCE_REQUIRE_REVIEW=false (or use the require_review input on Run workflow) and add secret FINANCE_TOKEN_JSON.
 name: finance-scheduler
 on:
   schedule:
@@ -9,8 +10,13 @@ on:
       content_type: { description: "educational | analytical | historical | news", default: "educational" }
       ticker: { description: "FINANCE_TICKER (optional)", default: "" }
       video_format: { description: "shorts | long", default: "shorts" }
+      require_review: { description: "true = save bundle only, false = upload to YouTube (blank = repo variable, default true)", default: "" }
+      privacy: { description: "private | unlisted | public (blank = repo variable, default private)", default: "" }
 permissions:
   contents: read
+concurrency:
+  group: finance-scheduler
+  cancel-in-progress: false
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -27,7 +33,10 @@ jobs:
       FINANCE_FORMAT: ${{ inputs.video_format || vars.FINANCE_FORMAT || 'shorts' }}
       FINANCE_VOICE_IMPL: agents_finance.voice_en:generate_voice
       FINANCE_EDGE_VOICE: ${{ vars.FINANCE_EDGE_VOICE }}
-      FINANCE_REQUIRE_REVIEW: ${{ vars.FINANCE_REQUIRE_REVIEW || 'true' }}
+      FINANCE_REQUIRE_REVIEW: ${{ inputs.require_review || vars.FINANCE_REQUIRE_REVIEW || 'true' }}
+      FINANCE_TOKEN_JSON: ${{ secrets.FINANCE_TOKEN_JSON }}
+      FINANCE_PRIVACY: ${{ inputs.privacy || vars.FINANCE_PRIVACY || 'private' }}
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

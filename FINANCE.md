@@ -22,7 +22,7 @@ New (all optional): `FINANCE_CATEGORY` (indian_markets, global_markets, company_
 - FII/DII, IPO subscription, fund NAV/expense ratios, fundamentals (P/E, margins) have **no provider yet**; those topics run as evergreen explainers until one is added (calculations for them already exist and are tested).
 
 ## Limitations / not done
-- **Auto-upload is not implemented** (needs a Finance YouTube OAuth token and the repo's upload agent pattern). Default is review mode: the run saves `output/finance_review/<topic>/` (video, script, facts, scenes, metadata with sources) and the workflow uploads it as an artifact.
+- **Auto-upload** is implemented in `agents_finance/upload_agent.py` (secret `FINANCE_TOKEN_JSON`, uploads `private` unless `FINANCE_PRIVACY` says otherwise) but off by default. Default is review mode: the run saves `output/finance_review/<topic>/` (video, script, facts, scenes, metadata with sources) and the workflow uploads it as an artifact.
 - **Dashboard tab not added** (`pages/` could not be read).
 - No hook engine for Finance (its profiles are per channel). Background music option is accepted but not wired (renderer's music interface not inspected).
 - Number grounding covers digits; spelled-out figures ("two lakh crore") are not machine-checked. Direction/semantics of interpretation are LLM-written and need review.

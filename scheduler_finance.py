@@ -46,6 +46,11 @@ def _default_video():
     return create_video
 
 
+def _default_upload():
+    from agents_finance.upload_agent import upload_video          # own OAuth token: FINANCE_TOKEN_JSON
+    return upload_video
+
+
 @dataclass
 class Deps:
     store: object = None
@@ -167,9 +172,8 @@ def _run(settings, deps):
         state.clear()
         return {"status": "ready_for_review", "bundle": bundle, "title": meta["title"], "warnings": script.warnings}
 
-    if deps.upload is None:
-        raise NotImplementedError("Auto-upload needs a Finance YouTube uploader (own OAuth token); see docs. Use FINANCE_REQUIRE_REVIEW=true.")
-    vid, url = state.step("upload", lambda: list(deps.upload(video_path, meta["title"], meta["description"], meta["hashtags"])))
+    upload = _load(os.getenv("FINANCE_UPLOAD_IMPL"), _default_upload) if deps.upload is None else deps.upload
+    vid, url = state.step("upload", lambda: list(upload(video_path, meta["title"], meta["description"], meta["hashtags"])))
     store.mark_posted(topic.id, topic.title)
     store.set_meta("finance_upload_count", str(_daily_count(store) + 1))
     state.clear()

@@ -419,6 +419,69 @@ class TestSchedulerEndToEnd(unittest.TestCase):
         self.assertEqual(sf.run_finance_cycle(s, deps)["status"], "fact_check_failed")
         self.assertFalse(os.path.exists("output/final_video.mp4"))
 
+    def test_live_upload_when_review_off(self):
+        import scheduler_finance as sf
+        s = S(category="investing", duration_sec=45, words_per_second=0.9, require_review=False)
+        deps = self.deps([json.dumps({"narration": GOOD, "title_ideas": ["How compounding works"]})])
+        calls = []
+        def upload(path, title, description, hashtags):
+            calls.append((path, title, description, hashtags)); return "vid123", "https://www.youtube.com/watch?v=vid123"
+        deps.upload = upload
+        r = sf.run_finance_cycle(s, deps)
+        self.assertEqual(r["status"], "uploaded", r)
+        self.assertEqual(r["video_url"], "https://www.youtube.com/watch?v=vid123")
+        self.assertEqual(len(calls), 1)
+        self.assertIn("not investment advice", calls[0][2].lower())     # disclaimer always travels with the upload
+        self.assertEqual(len(deps.store.posted_ids()), 1)
+        self.assertEqual(deps.store.get_meta("finance_upload_count"), "1")
+
+    def test_default_uploader_resolves_and_env_override(self):
+        import scheduler_finance as sf
+        from agents_finance import upload_agent
+        self.assertIs(sf._default_upload(), upload_agent.upload_video)
+        self.assertIs(sf._load("agents_finance.upload_agent:upload_video", sf._default_upload), upload_agent.upload_video)
+
+
+class TestUploadAgent(unittest.TestCase):
+    def _fake_client(self, captured):
+        class Req:
+            def next_chunk(self): return None, {"id": "abc123"}
+        class Videos:
+            def insert(self, part, body, media_body): captured["body"] = body; captured["part"] = part; return Req()
+        class YT:
+            def videos(self): return Videos()
+        return YT()
+
+    def test_upload_body_and_url(self):
+        from agents_finance import upload_agent as ua
+        cap = {}
+        d = tempfile.mkdtemp(); f = os.path.join(d, "v.mp4"); _write(f, b"v", "wb")
+        old = (ua.get_youtube_client, ua.googleapiclient.http.MediaFileUpload, os.environ.get("FINANCE_PRIVACY"))
+        os.environ.pop("FINANCE_PRIVACY", None)
+        ua.get_youtube_client = lambda: self._fake_client(cap)
+        ua.googleapiclient.http.MediaFileUpload = lambda *a, **k: object()
+        try:
+            vid, url = ua.upload_video(f, "T" * 150, "desc", ["#finance", "#shorts"])
+        finally:
+            ua.get_youtube_client, ua.googleapiclient.http.MediaFileUpload = old[0], old[1]
+        self.assertEqual((vid, url), ("abc123", "https://www.youtube.com/watch?v=abc123"))
+        sn, st = cap["body"]["snippet"], cap["body"]["status"]
+        self.assertEqual(len(sn["title"]), 100)
+        self.assertEqual(sn["tags"], ["finance", "shorts"])
+        self.assertEqual(sn["description"], "desc")
+        self.assertEqual(st["privacyStatus"], "private")                 # safe default until FINANCE_PRIVACY says otherwise
+        self.assertFalse(st["selfDeclaredMadeForKids"])
+
+    def test_missing_token_raises_clearly(self):
+        from agents_finance import upload_agent as ua
+        old = os.environ.pop("FINANCE_TOKEN_JSON", None)
+        cwd = os.getcwd(); os.chdir(tempfile.mkdtemp())
+        try:
+            with self.assertRaises(ValueError): ua._token_json()
+        finally:
+            os.chdir(cwd)
+            if old is not None: os.environ["FINANCE_TOKEN_JSON"] = old
+
 
 if __name__ == "__main__":
     unittest.main()
