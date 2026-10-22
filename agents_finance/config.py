@@ -75,7 +75,7 @@ class FinanceSettings:
     require_review: bool = True       # safe default: render + save for review, do not auto-upload
     max_retries: int = 2
     daily_upload_cap: int = 3
-    words_per_second: float = 2.4
+    words_per_second: float = 2.0
 
     @property
     def cat(self) -> Category:
