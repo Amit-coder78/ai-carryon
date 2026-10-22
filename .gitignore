@@ -38,3 +38,6 @@ cricket_token_b64.txt
 assets/pexels_clips/
 assets/thumbnails/
 assets/hook_clips/
+.DS_Store
+*.bak
+*.wav
