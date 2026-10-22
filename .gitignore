@@ -47,3 +47,4 @@ assets/hook_clips/
 .env
 *token*.json
 client_secret*.json
+!assets/**
