@@ -41,3 +41,14 @@ assets/hook_clips/
 .DS_Store
 *.bak
 *.wav
+.DS_Store
+*.bak
+*.patch
+*.wav
+*.mp4
+*.mp3
+view_history.json
+output/
+.env
+*token*.json
+client_secret*.json
