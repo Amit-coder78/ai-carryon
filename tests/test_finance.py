@@ -472,15 +472,41 @@ class TestUploadAgent(unittest.TestCase):
         self.assertEqual(st["privacyStatus"], "private")                 # safe default until FINANCE_PRIVACY says otherwise
         self.assertFalse(st["selfDeclaredMadeForKids"])
 
+    def test_b64_token_json_and_pickle(self):
+        import base64, pickle
+        from agents_finance import upload_agent as ua
+        raw = json.dumps({"refresh_token": "r", "token_uri": "u", "client_id": "c", "client_secret": "s"})
+        self.assertEqual(json.loads(ua._from_b64(base64.b64encode(raw.encode()).decode())), json.loads(raw))
+        from google.oauth2.credentials import Credentials
+        creds = Credentials(token="t", refresh_token="r", token_uri="u", client_id="c", client_secret="s")
+        got = json.loads(ua._from_b64(base64.b64encode(pickle.dumps(creds)).decode()))
+        self.assertEqual(got["refresh_token"], "r")
+        self.assertEqual(got["client_id"], "c")
+
+    def test_env_b64_secret_is_used(self):
+        import base64
+        from agents_finance import upload_agent as ua
+        raw = json.dumps({"refresh_token": "r"})
+        saved = {k: os.environ.pop(k, None) for k in ("FINANCE_TOKEN_JSON", "YOUTUBE_FINANCE_TOKEN_B64")}
+        os.environ["YOUTUBE_FINANCE_TOKEN_B64"] = base64.b64encode(raw.encode()).decode()
+        try:
+            self.assertEqual(json.loads(ua._token_json()), {"refresh_token": "r"})
+        finally:
+            os.environ.pop("YOUTUBE_FINANCE_TOKEN_B64", None)
+            for k, v in saved.items():
+                if v is not None: os.environ[k] = v
+
     def test_missing_token_raises_clearly(self):
         from agents_finance import upload_agent as ua
         old = os.environ.pop("FINANCE_TOKEN_JSON", None)
+        old_b64 = os.environ.pop("YOUTUBE_FINANCE_TOKEN_B64", None)
         cwd = os.getcwd(); os.chdir(tempfile.mkdtemp())
         try:
             with self.assertRaises(ValueError): ua._token_json()
         finally:
             os.chdir(cwd)
             if old is not None: os.environ["FINANCE_TOKEN_JSON"] = old
+            if old_b64 is not None: os.environ["YOUTUBE_FINANCE_TOKEN_B64"] = old_b64
 
 
 if __name__ == "__main__":

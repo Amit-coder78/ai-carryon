@@ -3,8 +3,10 @@
 token JSON comes from FINANCE_TOKEN_JSON (GitHub secret) or a local finance_token.json
 written by generate_finance_token.py. The description from build_metadata already
 carries sources, the risk disclaimer and hashtags, so it is sent unchanged."""
+import base64
 import json
 import os
+import pickle
 import time
 
 import google.oauth2.credentials
@@ -19,15 +21,28 @@ SCOPES = [
 LOCAL_TOKEN_FILES = ("finance_token.json", "token_finance.json")
 
 
+def _from_b64(raw):
+    """YOUTUBE_FINANCE_TOKEN_B64: base64 of finance_token.json (preferred) or of a pickled Credentials (gaming-style)."""
+    data = base64.b64decode(raw)
+    try:
+        json.loads(data)
+        return data.decode()
+    except ValueError:
+        return pickle.loads(data).to_json()
+
+
 def _token_json():
     token_json = os.getenv("FINANCE_TOKEN_JSON")
     if token_json:
         return token_json
+    token_b64 = os.getenv("YOUTUBE_FINANCE_TOKEN_B64")
+    if token_b64:
+        return _from_b64(token_b64.strip())
     for path in LOCAL_TOKEN_FILES:
         if os.path.exists(path):
             with open(path) as f:
                 return f.read()
-    raise ValueError("No Finance YouTube token found: set FINANCE_TOKEN_JSON or run generate_finance_token.py")
+    raise ValueError("No Finance YouTube token found: set YOUTUBE_FINANCE_TOKEN_B64 (or FINANCE_TOKEN_JSON) or run generate_finance_token.py")
 
 
 def get_youtube_client():
