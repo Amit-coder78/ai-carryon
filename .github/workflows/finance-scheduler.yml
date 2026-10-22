@@ -9,6 +9,8 @@ on:
       content_type: { description: "educational | analytical | historical | news", default: "educational" }
       ticker: { description: "FINANCE_TICKER (optional)", default: "" }
       video_format: { description: "shorts | long", default: "shorts" }
+permissions:
+  contents: read
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -31,7 +33,9 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: pip install -r requirements.txt -r requirements_finance.txt
       - run: python -m unittest tests.test_finance
+      - name: Clear files the tests wrote
+        run: rm -rf output assets/pexels_clips && mkdir -p output assets/pexels_clips
       - run: python scheduler_finance.py
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: finance-review, path: output/finance_review/, if-no-files-found: ignore }
+        with: { name: finance-review, path: output/finance_review/, if-no-files-found: ignore, retention-days: 3 }
