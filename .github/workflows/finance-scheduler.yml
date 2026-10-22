@@ -25,6 +25,8 @@ jobs:
       FINANCE_CONTENT_TYPE: ${{ inputs.content_type || vars.FINANCE_CONTENT_TYPE || 'educational' }}
       FINANCE_TICKER: ${{ inputs.ticker || vars.FINANCE_TICKER }}
       FINANCE_FORMAT: ${{ inputs.video_format || vars.FINANCE_FORMAT || 'shorts' }}
+      FINANCE_VOICE_IMPL: agents_finance.voice_en:generate_voice
+      FINANCE_EDGE_VOICE: ${{ vars.FINANCE_EDGE_VOICE }}
       FINANCE_REQUIRE_REVIEW: ${{ vars.FINANCE_REQUIRE_REVIEW || 'true' }}
     steps:
       - uses: actions/checkout@v4
