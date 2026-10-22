@@ -163,4 +163,3 @@ def backup_all():
     backup_view_history()
     backup_ab_log()
     backup_posted_topics()
-    backup_sqlite_db()
