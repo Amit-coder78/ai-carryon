@@ -26,5 +26,8 @@ jobs:
           pip install -r requirements_cricket.txt
           pip install pytest
 
+      - name: Install ffmpeg (Horror render tests generate real clips)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Run tests
         run: python -m pytest tests -q -W error::ResourceWarning
