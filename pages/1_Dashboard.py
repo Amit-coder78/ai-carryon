@@ -1127,7 +1127,8 @@ with horror_tab:
     if os.path.exists(_hr_report):
         with st.expander("🧾 Latest review report (assets used / missing, reviewer issues)"):
             try:
-                _hr_data = json.load(open(_hr_report))
+                with open(_hr_report) as _hr_f:
+                    _hr_data = json.load(_hr_f)
                 st.json({"review": _hr_data.get("review"), "assets": _hr_data.get("assets"),
                          "metadata": _hr_data.get("metadata"), "llm_calls": _hr_data.get("llm_calls")})
             except Exception as e:

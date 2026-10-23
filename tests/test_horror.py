@@ -262,7 +262,9 @@ def test_sound_design_without_key_degrades_gracefully(bible):
 
 def test_cc_by_sound_requires_attribution(work, bible):
     from agents_bhakti import music_agent
-    p = str(work / "bed.mp3"); open(p, "wb").write(b"x")
+    p = str(work / "bed.mp3")
+    with open(p, "wb") as f:
+        f.write(b"x")
     rec = {"path": p, "license": music_agent.CC_BY, "name": "Rain", "author": "someone", "url": "https://freesound.org/s/1/"}
     out = sound_agent.build_sound_design(make_cfg(music=True), _scenes(bible), bible, 40, fetch=lambda q, d: rec)
     assert out["attributions"] and "CC BY" in sound_agent.attribution_lines(out["attributions"])[0]
@@ -275,7 +277,7 @@ def test_video_assembly_with_local_assets(work, bible, clip):
     for sc in scenes:
         sc.duration, sc.pause_after = 2.0, 0.3
     from pydub import AudioSegment
-    AudioSegment.silent(duration=6000).export("output_voice.mp3", format="mp3")
+    AudioSegment.silent(duration=6000).export("output_voice.mp3", format="mp3").close()
     assets = {sc.scene_id: {"status": "ok", "path": clip} for sc in scenes}
     scene_planner.retime_from_actual(scenes, [2.0, 2.0, 2.0])
     out = video_agent.render_video(scenes, assets, "output_voice.mp3", {"bed": None, "sfx": []}, subtitles=True,
@@ -296,7 +298,8 @@ def test_render_refuses_scene_without_clip(work, bible, clip):
 def test_srt_uses_real_scene_timings(work, bible):
     scenes = _scenes(bible, 2)
     scene_planner.retime_from_actual(scenes, [4.0, 5.0])
-    srt = open(video_agent.build_srt(scenes, "output/c.srt")).read()
+    with open(video_agent.build_srt(scenes, "output/c.srt")) as f:
+        srt = f.read()
     assert "00:00:00,000 -->" in srt and "00:00:04,000 -->" in srt
 
 
@@ -330,7 +333,8 @@ def test_reviewer_passes_clean_package(bible, work, clip):
     cfg = make_cfg()
     scenes = scene_planner.plan_scenes(cfg, " ".join(SHORT_SENTENCES), bible, LLMBudget(8, invoke=FakeLLM()))
     assets = {s.scene_id: {"status": "ok", "path": clip, "relevance": 1.0} for s in scenes}
-    open("v.mp4", "wb").write(b"x")
+    with open("v.mp4", "wb") as f:
+        f.write(b"x")
     report = reviewer.review(cfg, " ".join(SHORT_SENTENCES), bible, scenes, assets=assets,
                              voice={"total": 50.0}, sound={"bed": {"path": "x"}, "sfx": [{"at": 10.0}, {"at": 30.0}]},
                              video={"path": "v.mp4", "probed_duration": 50.2},

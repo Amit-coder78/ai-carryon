@@ -34,6 +34,11 @@ def env(tmp_path, monkeypatch):
                             "videos": videos, "clip": clip, "pexels": FakePexels})
 
 
+def _report():
+    with open(sh.REPORT_PATH) as f:
+        return json.load(f)
+
+
 def run(env, overrides=None, force=False, **dk):
     return sh.run_horror_cycle({"category": "supernatural", "music": False, "subtitles": False, **(overrides or {})},
                                force=force, deps=env.deps(**dk))
@@ -45,7 +50,7 @@ def test_dry_run_renders_valid_short_and_commits_nothing(env):
     assert res["status"] == "rendered_not_uploaded", res
     assert res["video_path"].endswith(".mp4") and os.path.getsize(res["video_path"]) > 0
     assert res["llm_calls"] == len(llm.calls) == 5            # concept, bible, script, scene plan, metadata
-    report = json.load(open(sh.REPORT_PATH))
+    report = _report()
     assert report["review"]["passed"] and 45 <= report["video"]["probed_duration"] <= 60
     assert report["metadata"]["description"].startswith("Fiction:")
     assert all(a["status"] in ("ok", "reused_same_location") for a in report["assets"])
@@ -85,7 +90,7 @@ def test_missing_footage_stops_before_render_and_flags_scenes(env, tmp_path):
     res = run(env, {"upload": False}, pexels=env.pexels(env.clip, empty=True))
     assert res["status"] == "assets_missing" and "s1" in res["detail"]
     assert not os.path.exists("output/horror_final.mp4")      # nothing rendered, nothing uploaded
-    report = json.load(open(sh.REPORT_PATH))
+    report = _report()
     assert {a["status"] for a in report["assets"]} == {"missing"}
     assert any(i["code"] == "scene_clip_missing" for i in report["review"]["issues"])
     assert env.meta.d.get("run_state:horror")                 # progress is kept so the next run resumes
@@ -118,7 +123,7 @@ def test_llm_budget_cap_is_respected_and_metadata_falls_back(env):
     llm = FakeLLM()
     res = run(env, {"upload": False, "max_llm_calls": 4}, llm=llm)
     assert res["status"] == "rendered_not_uploaded" and len(llm.calls) == 4
-    assert json.load(open(sh.REPORT_PATH))["metadata"]["description"].startswith("Fiction:")
+    assert _report()["metadata"]["description"].startswith("Fiction:")
 
 
 def test_resume_after_upload_failure_does_not_regenerate(env):
@@ -157,7 +162,7 @@ def test_over_long_narration_triggers_one_targeted_rewrite_not_a_full_rerun(env)
     res = run(env, {"upload": False, "max_llm_calls": 8}, llm=llm, synth=slow)
     assert res["status"] == "rendered_not_uploaded", res
     assert sum("Shorten this horror narration" in p for p in llm.calls) == 1
-    assert 45 <= json.load(open(sh.REPORT_PATH))["video"]["probed_duration"] <= 60
+    assert 45 <= _report()["video"]["probed_duration"] <= 60
 
 
 def test_horror_only_writes_horror_keys(env):
@@ -169,9 +174,9 @@ def test_sound_design_is_mixed_when_available(env, tmp_path):
     from pydub import AudioSegment
     from agents_bhakti import music_agent
     bed = str(tmp_path / "bed.mp3")
-    AudioSegment.silent(duration=3000).export(bed, format="mp3")
+    AudioSegment.silent(duration=3000).export(bed, format="mp3").close()
     rec = {"path": bed, "license": music_agent.CC0, "name": "Fog", "author": "a", "url": "u"}
     res = run(env, {"upload": False, "music": True}, fetch=lambda q, d: rec)
     assert res["status"] == "rendered_not_uploaded"
-    report = json.load(open(sh.REPORT_PATH))
+    report = _report()
     assert not any(i["code"] == "no_ambience" for i in report["review"]["issues"])

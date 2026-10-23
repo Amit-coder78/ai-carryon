@@ -124,7 +124,7 @@ class FakePexels:
 
 def fake_synth(text, path, voice, rate, pitch):
     from pydub import AudioSegment
-    AudioSegment.silent(duration=int(max(len(text.split()) / 2.3, 1.0) * 1000)).export(path, format="mp3")
+    AudioSegment.silent(duration=int(max(len(text.split()) / 2.3, 1.0) * 1000)).export(path, format="mp3").close()
 
 
 class FakeMeta:

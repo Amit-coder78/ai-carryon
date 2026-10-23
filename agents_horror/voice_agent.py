@@ -57,7 +57,7 @@ def generate_narration(scenes, out_path="output/horror_voice.mp3", work_dir="out
         seg = AudioSegment.from_file(p) + AudioSegment.silent(duration=int(sc.pause_after * 1000))
         durations.append(len(seg) / 1000.0)
         combined += seg
-    combined.export(out_path, format="mp3")
+    combined.export(out_path, format="mp3").close()
     total, speedup = len(combined) / 1000.0, 1.0
     if max_total and total > max_total:
         speedup = min(total / (max_total - 0.2), MAX_SPEEDUP)

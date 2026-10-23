@@ -1,4 +1,4 @@
-# AI CarryON Horror (6th pipeline)
+# AI CarryON Horror (7th pipeline, added after Finance)
 
 Original English horror stories as vertical 9:16 videos: YouTube Shorts (45–60 s, default) or long-form
 (90–1200 s). Every video is labelled as **fiction** — never as a true story.
