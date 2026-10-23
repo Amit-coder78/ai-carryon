@@ -1,10 +1,11 @@
-"""English voice for the Finance channel (Edge TTS, no API key needed)."""
+"""English voice for the Finance channel (Edge TTS, no API key needed).
+Defaults are a touch faster and lower for a confident creator feel; override with FINANCE_EDGE_RATE / FINANCE_EDGE_PITCH."""
 import asyncio
 import os
 
 VOICE = os.environ.get("FINANCE_EDGE_VOICE") or "en-IN-PrabhatNeural"
-RATE = os.environ.get("FINANCE_EDGE_RATE") or "+0%"
-PITCH = os.environ.get("FINANCE_EDGE_PITCH") or "+0Hz"
+RATE = os.environ.get("FINANCE_EDGE_RATE") or "+8%"
+PITCH = os.environ.get("FINANCE_EDGE_PITCH") or "-2Hz"
 
 
 async def _save(text, output_path):

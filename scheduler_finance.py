@@ -154,7 +154,7 @@ def _run(settings, deps):
                    validate=os.path.exists, after=["voice"])
 
     def _media():
-        paths, errors = fetch_scene_media(scenes, clip_fn=deps.clip_fn)
+        paths, errors = fetch_scene_media(scenes, clip_fn=deps.clip_fn, store=store)
         for e in errors: print("Media:", e)
         return paths
     state.step("media", _media, validate=lambda p: len(p) >= 2 and all(os.path.exists(x) for x in p), after=["voice"])
