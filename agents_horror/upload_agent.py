@@ -1,6 +1,7 @@
 # agents_horror/upload_agent.py
 """YouTube upload for the Horror channel. Same pattern as agents_cricket/upload_agent.py with the
-Horror channel's own token (HORROR_YOUTUBE_TOKEN_B64 or horror_token.pickle)."""
+Horror channel's own token (YOUTUBE_HORROR_TOKEN_B64, like YOUTUBE_FINANCE_TOKEN_B64; the older
+name HORROR_YOUTUBE_TOKEN_B64 or a local horror_token.pickle also work)."""
 import base64
 import os
 import pickle
@@ -10,15 +11,19 @@ SCOPES = ["https://www.googleapis.com/auth/youtube.upload",
           "https://www.googleapis.com/auth/youtube.force-ssl"]
 
 
+def _token_b64():
+    return os.getenv("YOUTUBE_HORROR_TOKEN_B64") or os.getenv("HORROR_YOUTUBE_TOKEN_B64")
+
+
 def has_credentials():
-    return bool(os.getenv("HORROR_YOUTUBE_TOKEN_B64")) or os.path.exists("horror_token.pickle")
+    return bool(_token_b64()) or os.path.exists("horror_token.pickle")
 
 
 def authenticate_youtube():
     from google.auth.transport.requests import Request
     from googleapiclient.discovery import build
     creds = None
-    token_b64 = os.getenv("HORROR_YOUTUBE_TOKEN_B64")
+    token_b64 = _token_b64()
     if token_b64:
         creds = pickle.loads(base64.b64decode(token_b64))
     elif os.path.exists("horror_token.pickle"):
@@ -26,7 +31,7 @@ def authenticate_youtube():
             creds = pickle.load(f)
     if not creds:
         raise RuntimeError("No Horror YouTube token. Create one with the Horror channel's Google account "
-                           "(same method as generate_cricket_token.py), base64 it into HORROR_YOUTUBE_TOKEN_B64.")
+                           "(same method as generate_cricket_token.py), base64 it into YOUTUBE_HORROR_TOKEN_B64.")
     if not creds.valid and creds.expired and creds.refresh_token:
         creds.refresh(Request())
     return build("youtube", "v3", credentials=creds)

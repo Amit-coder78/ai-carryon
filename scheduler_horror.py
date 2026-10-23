@@ -280,7 +280,7 @@ def _run_inner(overrides, force, d):
     result = {"status": "rendered_not_uploaded", "title": meta["title"], "video_path": video["path"],
               "report": REPORT_PATH, "category": category, "llm_calls": budget.calls}
     if not (cfg.upload and d.can_upload):
-        why = "dry run (--no-upload / HORROR_UPLOAD=0)" if not cfg.upload else "no HORROR_YOUTUBE_TOKEN_B64"
+        why = "dry run (--no-upload / HORROR_UPLOAD=0)" if not cfg.upload else "no YOUTUBE_HORROR_TOKEN_B64"
         print(f"Not uploading: {why}")
         state.clear()  # a dry run never counts toward series/caps/clip-memory
         return result

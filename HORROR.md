@@ -28,7 +28,7 @@ A typical run uses **5 LLM calls** (cap: `HORROR_MAX_LLM_CALLS`, default 8). Nar
 
 ## Setup
 1. Secrets (GitHub → Settings → Secrets): `DATABASE_URL`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `PEXELS_API_KEY` (already exist; optional
-   `*_HORROR` versions are preferred when set), `FREESOUND_API_KEY` (optional, for ambience/SFX), `HORROR_YOUTUBE_TOKEN_B64`
+   `*_HORROR` versions are preferred when set), `FREESOUND_API_KEY` (optional, for ambience/SFX), `YOUTUBE_HORROR_TOKEN_B64`
    (optional: without it the run renders only). Create the token like `generate_cricket_token.py`, with the Horror channel's Google account.
 2. Run locally: `python scheduler_horror.py --no-upload` (needs `ffmpeg`; keys in `.env`).
 3. Automatic: `.github/workflows/horror-scheduler.yml` (every 3 h; the daily cap decides). Manual run: Actions → Horror Scheduler → Run workflow.

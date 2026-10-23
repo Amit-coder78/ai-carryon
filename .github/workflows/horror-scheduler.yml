@@ -75,7 +75,7 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY_HORROR || secrets.PEXELS_API_KEY }}
           PEXELS_API_KEY_SHARED: ${{ secrets.PEXELS_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
-          HORROR_YOUTUBE_TOKEN_B64: ${{ secrets.HORROR_YOUTUBE_TOKEN_B64 }}
+          YOUTUBE_HORROR_TOKEN_B64: ${{ secrets.YOUTUBE_HORROR_TOKEN_B64 }}
           HORROR_CATEGORY: ${{ github.event.inputs.category || vars.HORROR_CATEGORY }}
           HORROR_FORMAT: ${{ github.event.inputs.format || vars.HORROR_FORMAT }}
           HORROR_DURATION: ${{ github.event.inputs.duration || vars.HORROR_DURATION }}
