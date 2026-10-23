@@ -1,0 +1,107 @@
+name: Horror Scheduler
+
+on:
+  schedule:
+    # Every 3 hours. scheduler_horror.py's own daily cap (HORROR_DAILY_UPLOAD_CAP, default 2) and
+    # minimum gap (HORROR_MIN_GAP_HOURS, default 4) decide whether a given run generates anything.
+    - cron: "15 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      category:
+        description: "Horror category (empty = rotate)"
+        required: false
+        default: ""
+        type: choice
+        options: ["", supernatural, psychological, folklore, mystery, creature]
+      format:
+        description: "shorts (45-60 s) or long"
+        required: false
+        default: "shorts"
+        type: choice
+        options: [shorts, long]
+      duration:
+        description: "Target seconds (empty = default for the format)"
+        required: false
+        default: ""
+      intensity:
+        description: "Suspense intensity 1-5"
+        required: false
+        default: "3"
+      mode:
+        description: "standalone or episodic series"
+        required: false
+        default: "standalone"
+        type: choice
+        options: [standalone, episodic]
+      series_id:
+        description: "Series id (episodic mode)"
+        required: false
+        default: "default"
+      idea:
+        description: "Your own story idea (optional)"
+        required: false
+        default: ""
+      upload:
+        description: "Upload to YouTube? (false = render only, dry run)"
+        required: false
+        default: "true"
+
+jobs:
+  run-scheduler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: pip install -r requirements_cricket.txt   # same stack Cricket uses; Horror adds no dependencies
+
+      - name: Run Horror scheduler
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_HORROR || secrets.GROQ_API_KEY }}
+          GROQ_API_KEY_SHARED: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_HORROR || secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_SHARED: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY_HORROR || secrets.PEXELS_API_KEY }}
+          PEXELS_API_KEY_SHARED: ${{ secrets.PEXELS_API_KEY }}
+          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
+          HORROR_YOUTUBE_TOKEN_B64: ${{ secrets.HORROR_YOUTUBE_TOKEN_B64 }}
+          HORROR_CATEGORY: ${{ github.event.inputs.category || vars.HORROR_CATEGORY }}
+          HORROR_FORMAT: ${{ github.event.inputs.format || vars.HORROR_FORMAT }}
+          HORROR_DURATION: ${{ github.event.inputs.duration || vars.HORROR_DURATION }}
+          HORROR_INTENSITY: ${{ github.event.inputs.intensity || vars.HORROR_INTENSITY }}
+          HORROR_MODE: ${{ github.event.inputs.mode || vars.HORROR_MODE }}
+          HORROR_SERIES_ID: ${{ github.event.inputs.series_id || vars.HORROR_SERIES_ID }}
+          HORROR_IDEA: ${{ github.event.inputs.idea }}
+          HORROR_UPLOAD: ${{ github.event.inputs.upload || vars.HORROR_UPLOAD }}
+          HORROR_SETTING: ${{ vars.HORROR_SETTING }}
+          HORROR_MUSIC: ${{ vars.HORROR_MUSIC }}
+          HORROR_SUBTITLES: ${{ vars.HORROR_SUBTITLES }}
+          HORROR_RESEARCH: ${{ vars.HORROR_RESEARCH }}
+          HORROR_MAX_LLM_CALLS: ${{ vars.HORROR_MAX_LLM_CALLS }}
+          HORROR_DAILY_UPLOAD_CAP: ${{ vars.HORROR_DAILY_UPLOAD_CAP }}
+          HORROR_MIN_GAP_HOURS: ${{ vars.HORROR_MIN_GAP_HOURS }}
+          HORROR_EDGE_VOICE: ${{ vars.HORROR_EDGE_VOICE }}
+          HORROR_EDGE_RATE: ${{ vars.HORROR_EDGE_RATE }}
+          HORROR_EDGE_PITCH: ${{ vars.HORROR_EDGE_PITCH }}
+        run: python scheduler_horror.py ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }}
+
+      - name: Upload run report + log (for debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: horror-report-${{ github.run_id }}
+          path: |
+            output/horror_report.json
+            output/*.txt
+          if-no-files-found: ignore

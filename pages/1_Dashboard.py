@@ -315,7 +315,7 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # ── Main Tabs ────────────────────────────────────────────────────
-english_tab, hindi_tab, cricket_tab, gaming_tab, bhakti_tab = st.tabs(["🇬🇧 English Channel", "🇮🇳 Hindi Channel", "🏏 Cricket Channel", "🎮 Gaming Channel", "🕉️ Bhakti Channel"])
+english_tab, hindi_tab, cricket_tab, gaming_tab, bhakti_tab, horror_tab = st.tabs(["🇬🇧 English Channel", "🇮🇳 Hindi Channel", "🏏 Cricket Channel", "🎮 Gaming Channel", "🕉️ Bhakti Channel", "👻 Horror Channel"])
 
 # ════════════════════════════════════════════════════════════════
 # ENGLISH CHANNEL
@@ -1058,6 +1058,88 @@ with bhakti_tab:
         if os.path.exists(_bh_log):
             with st.expander("📜 Latest scheduler log"):
                 st.code("".join(open(_bh_log).readlines()[-40:]), language="text")
+
+# ════════════════════════════════════════════════════════════════
+# HORROR CHANNEL (AI CarryON Horror — original English horror Shorts / long-form,
+# Pexels footage + narration + ambience, runs on GitHub Actions via scheduler_horror.py)
+# ════════════════════════════════════════════════════════════════
+with horror_tab:
+    import json
+    st.title("👻 AI CarryON Horror")
+    st.markdown("Original **fiction** horror in English: story bible → script → scene plan → Pexels footage (same integration as "
+                "Cricket) → narration + ambience → 9:16 video → review → upload. Every video is labelled as fiction.")
+    try:
+        from scheduler_horror import get_posted_count_today as _hr_posted_today
+        _hr_count = _hr_posted_today()
+    except Exception as e:
+        _hr_count = None
+        st.info(f"Post history unavailable here: {e}")
+    h1, h2, h3 = st.columns(3)
+    h1.metric("Uploaded in last 24h", _hr_count if _hr_count is not None else "—")
+    h2.metric("Daily cap", os.getenv("HORROR_DAILY_UPLOAD_CAP", "2"))
+    h3.metric("LLM calls / run (max)", os.getenv("HORROR_MAX_LLM_CALLS", "8"))
+
+    st.divider()
+    st.markdown("**Generate one video now**")
+    hc1, hc2, hc3 = st.columns(3)
+    _hr_cat = hc1.selectbox("Category", ["(rotate)", "supernatural", "psychological", "folklore", "mystery", "creature"], key="horror_cat")
+    _hr_fmt = hc2.selectbox("Format", ["shorts", "long"], key="horror_fmt")
+    _hr_dur = hc3.number_input("Duration (seconds, 0 = default)", min_value=0, max_value=1200, value=0, key="horror_dur",
+                               help="Shorts are limited to 45-60 s, long-form to 90-1200 s.")
+    hc4, hc5, hc6 = st.columns(3)
+    _hr_int = hc4.slider("Suspense intensity", 1, 5, 3, key="horror_int")
+    _hr_mode = hc5.selectbox("Mode", ["standalone", "episodic"], key="horror_mode")
+    _hr_series = hc6.text_input("Series id (episodic)", value="default", key="horror_series")
+    _hr_setting = st.text_input("Story setting (optional)", key="horror_setting", placeholder="e.g. abandoned railway station")
+    _hr_idea = st.text_area("Your own story idea (optional)", key="horror_idea", height=80)
+    ht1, ht2 = st.columns(2)
+    _hr_music = ht1.checkbox("Ambience + sound effects (needs FREESOUND_API_KEY)", value=True, key="horror_music")
+    _hr_subs = ht2.checkbox("Burn subtitles", value=True, key="horror_subs")
+
+    def _hr_overrides(upload):
+        o = {"category": None if _hr_cat == "(rotate)" else _hr_cat, "format": _hr_fmt,
+             "duration_sec": int(_hr_dur) or None, "intensity": _hr_int, "mode": _hr_mode, "series_id": _hr_series,
+             "setting": _hr_setting.strip() or None, "idea": _hr_idea.strip() or None,
+             "music": _hr_music, "subtitles": _hr_subs, "upload": upload}
+        return {k: v for k, v in o.items() if v is not None}
+
+    st.caption("**Dry run** renders the video and a review report but does NOT upload and does not count toward the daily cap.")
+    _hr_dry = st.button("🎬 Generate (dry run, no upload)", key="horror_dry_btn")
+    _hr_confirm = st.checkbox("I understand this will upload a real video now", key="horror_confirm_run")
+    _hr_live = st.button("🔥 Generate + Upload Horror Video", type="primary", key="horror_run_btn", disabled=not _hr_confirm)
+    if _hr_dry or _hr_live:
+        with st.spinner("Running the Horror pipeline... this can take several minutes"):
+            try:
+                from scheduler_horror import run_horror_cycle
+                _hr_result = run_horror_cycle(_hr_overrides(upload=bool(_hr_live)), force=True)
+                if _hr_result.get("status") in ("uploaded", "rendered_not_uploaded"):
+                    st.success(f"✅ {_hr_result['status']}: {_hr_result.get('title', '')}")
+                    if _hr_result.get("video_url"):
+                        st.markdown(f"[Open on YouTube]({_hr_result['video_url']})")
+                    if _hr_result.get("video_path") and os.path.exists(_hr_result["video_path"]):
+                        st.video(_hr_result["video_path"])
+                else:
+                    st.warning(f"Stopped: {_hr_result.get('status')} — {_hr_result.get('detail') or _hr_result.get('error') or _hr_result.get('reason', '')}")
+            except Exception as e:
+                st.error(f"Pipeline error: {e}")
+
+    _hr_report = "output/horror_report.json"
+    if os.path.exists(_hr_report):
+        with st.expander("🧾 Latest review report (assets used / missing, reviewer issues)"):
+            try:
+                _hr_data = json.load(open(_hr_report))
+                st.json({"review": _hr_data.get("review"), "assets": _hr_data.get("assets"),
+                         "metadata": _hr_data.get("metadata"), "llm_calls": _hr_data.get("llm_calls")})
+            except Exception as e:
+                st.error(f"Could not read report: {e}")
+    try:
+        from agents.database import db as _hr_db
+        _hr_vids = _hr_db.get_all_videos(channel="horror")
+        if _hr_vids:
+            with st.expander("📼 Recent Horror uploads"):
+                st.dataframe(_hr_vids[:20] if isinstance(_hr_vids, list) else _hr_vids)
+    except Exception:
+        pass
 
 # ════════════════════════════════════════════════════════════════
 # CRICKET CHANNEL (fully automated — same pipeline as Render)

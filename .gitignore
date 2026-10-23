@@ -49,3 +49,4 @@ assets/hook_clips/
 client_secret*.json
 !assets/**
 output/
+assets/horror_clips/

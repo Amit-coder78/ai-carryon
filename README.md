@@ -232,3 +232,6 @@ counts); Cricket runs it from its own `14:00 UTC` cron (`--comments`).
 ---
 
 *AI CarryON — Built by Amit Kumar*
+
+## AI CarryON Horror
+A sixth pipeline (original English horror Shorts / long-form). See [HORROR.md](HORROR.md).
