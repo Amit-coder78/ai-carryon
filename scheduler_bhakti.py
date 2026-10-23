@@ -46,33 +46,26 @@ def mark_posted_today(topic):
 
 
 def get_adaptive_hours():
-    """Top N best upload hours from real Bhakti velocity data, falling
-    back to devotional-peak defaults (early morning Brahma muhurta and
-    evening aarti time) for any slots not yet backed by real data."""
-    # UTC ≈ 6:00/7:30 AM IST (morning puja) and 7:00 PM IST (evening aarti)
-    fallback = [0, 2, 13]
-    MIN_GOOD_WINDOWS = 3
-
+    """Upload hours come ONLY from Bhakti velocity data in the database.
+    Returns:
+      list[int] - peak hours (UTC) backed by >= 3 samples each
+      None      - no usable data yet (bootstrap: any hour is allowed)
+      []        - DB lookup failed (skip this run rather than upload blindly)
+    """
+    MIN_SAMPLES = 3
     try:
         from agents_bhakti.velocity_agent import get_best_upload_windows_bhakti
         windows = get_best_upload_windows_bhakti(top_n=VIDEOS_PER_DAY)
-        good_windows = [w for w in windows if w["sample_count"] >= 3]
-
-        if len(good_windows) >= MIN_GOOD_WINDOWS:
-            hours = [w["hour"] for w in good_windows[:VIDEOS_PER_DAY]]
-            for h in fallback:
-                if len(hours) >= VIDEOS_PER_DAY:
-                    break
-                if h not in hours:
-                    hours.append(h)
-            hours = sorted(hours)
-            log(f"Adaptive hours (real+fallback mix, UTC): {hours}")
-            return hours
+        good = [w for w in windows if w["sample_count"] >= MIN_SAMPLES]
+        if not good:
+            log("No Bhakti peak-hour data yet — bootstrap mode (any hour allowed)")
+            return None
+        hours = sorted(w["hour"] for w in good[:VIDEOS_PER_DAY])
+        log(f"Peak hours from DB (UTC): {hours}")
+        return hours
     except Exception as e:
-        log(f"Could not get adaptive hours: {e}")
-
-    log(f"Not enough Bhakti data yet — using fallback hours (UTC): {fallback}")
-    return fallback
+        log(f"Could not get peak hours from DB: {e}")
+        return []
 
 
 def should_generate_now():
@@ -83,20 +76,22 @@ def should_generate_now():
     import datetime as _dt
     current_hour = _dt.datetime.utcnow().hour
 
-    if current_hour in adaptive_hours:
-        try:
-            from agents.database import db
-            from datetime import datetime, timezone
-            last = db.get_meta("last_upload_hour_bhakti")
-            if last:
-                gap = (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() / 3600
-                if gap < 1.0:
-                    return False, f"Only {gap:.1f}h since last Bhakti upload — need 1h gap"
-        except Exception:
-            pass
-        return True, f"Current hour {current_hour:02d}:00 UTC is in best hours {adaptive_hours}"
+    # None = bootstrap (no data yet), otherwise must be a DB peak hour
+    if adaptive_hours is not None and current_hour not in adaptive_hours:
+        return False, f"Current hour {current_hour:02d}:00 UTC not in DB peak hours {adaptive_hours}"
 
-    return False, f"Current hour {current_hour:02d}:00 UTC not in best hours {adaptive_hours}"
+    try:
+        from agents.database import db
+        from datetime import datetime, timezone
+        last = db.get_meta("last_upload_hour_bhakti")
+        if last:
+            gap = (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() / 3600
+            if gap < 1.0:
+                return False, f"Only {gap:.1f}h since last Bhakti upload — need 1h gap"
+    except Exception:
+        pass
+
+    return True, f"Hour {current_hour:02d}:00 UTC OK (peak hours: {adaptive_hours or 'bootstrap'})"
 
 
 def generate_and_upload_bhakti(force=False):
