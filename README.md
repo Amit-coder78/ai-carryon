@@ -291,33 +291,60 @@ script -> story analysis + hook intent -> 3-5 queries -> Pexels (10-20 candidate
 - Env: `HOOK_ENGINE=0` (off everywhere), `HOOK_ENGINE_<CHANNEL>=0`, `HOOK_MIN_RELEVANCE`, `HOOK_REUSE_COOLDOWN_DAYS`, `GAMING_HOOK_MIN_INTENSITY`.
 - Tests: `python -m unittest tests.test_hook_engine -v`
 
-## Comment Reply Agent
+## Comment Agent
 
-One shared engine (`agents/comment_engine.py`) with thin per-channel wrappers
-(`comment_reply_agent.py` in `agents/`, `agents_hindi/`, `agents_bhakti/`, `agents_cricket/`). English, Hindi and Bhakti run it from
-their scheduler once per IST day (any time 19:00-23:59 IST, tracked in the DB so a late GitHub cron still
-counts); Cricket runs it from its own `14:00 UTC` cron (`--comments`).
+One shared engine (`comment_engine/`) serves all seven channels (cricket, gaming, finance, horror, english, hindi,
+bhakti). Each channel has a validated persona in `comment_personas/<persona>.yaml`; the engine is built to
+**draft first, publish only after the owner approves**.
 
-- One LLM call per comment returns category + reply + topic. Spam/Offensive are never answered.
-- Bhakti has a devotional voice: it mirrors greetings ("Jai Shree Ram" gets the same greeting back), never jokes about deities, never promises miracles, and never answers religious arguments (`Religious Debate` is skipped like Spam).
-- State lives in the database (`comment_history`, `topic_requests`; cricket: `cricket_comment_history`,
-  `cricket_match_requests`), not `output/*.json`, which Actions wipes every run.
-- A comment is only finished once the reply is posted, deliberately skipped, or failed permanently. LLM/API
-  hiccups are retried on the next run (3 attempts).
-- A missing `youtube.force-ssl` scope, expired token or exhausted quota aborts the run with the fix in the log.
-- Skips the channel's own comments and threads that already have a reply; never posts links or @mentions.
-- Per-run caps: 25 replies, 15 minutes, newest 250 threads.
-- `COMMENT_AUTO_REPLY=false` is a dry run (drafts stored, nothing posted); `COMMENT_FORCE=true` ignores the
-  window. Both are inputs on the English/Hindi/Bhakti/Cricket workflows' manual "Run workflow" button.
-- Tokens must include `youtube.force-ssl`: `generate_english_token.py`, `generate_hindi_token_v3.py`,
-  `generate_bhakti_token.py`, `generate_cricket_token.py` (the old cricket and bhakti tokens cannot post; regenerate them).
-- Tests: `python -m unittest tests.test_comment_engine -v`
+```
+sync (official YouTube API) -> classify -> generate (persona + video context + examples)
+  -> validate (hard rules, then LLM judge) -> draft -> owner approve/edit/reject -> publish
+```
+
+- **Safe by default.** `COMMENT_AGENT_ENABLED` is off, mode is `draft`, and a channel can only publish if its owner turned
+  publishing on *and* approved that specific draft. Publishing re-validates, re-checks the thread, and reconciles with
+  YouTube after a timeout so a reply is never posted twice. Kill switches: `COMMENT_AGENT_ENABLED=false`, per-channel `pause`.
+- **Untrusted input.** Comments/descriptions are data, never instructions; spam, links, threats, personal data and prompt
+  injection are screened before any LLM call. Validator rules per domain: no guaranteed returns or personal investment advice
+  (finance), no invented scores/stats (cricket), no fabricated scripture or divine-outcome promises (bhakti).
+- **Keeps feeding the Brain.** When a viewer asks for a specific video (intent `suggestion`), the requested topic is saved to
+  `topic_requests` with the commenter's `author_channel_id` (cricket: `cricket_match_requests`), exactly once per comment, even when
+  the reply is skipped or held for review. The Brain's demand signal reads these rows.
+- **Isolation.** Every table and query is scoped by `(tenant_id, channel_id)`; each channel uses its own token.
+- **Persona edits without code:** `python -m comment_engine persona --channel cricket --set voice.emoji_level=low`
+  (allowed: language, humor/assertiveness/emoji/slang level, max sentences, publishing mode).
+- **Scheduling:** English/Hindi/Bhakti/Gaming/Finance/Horror call `comment_engine.service.run_scheduled(channel)` after their cycle
+  (once per IST day in the 19:00-23:59 window; `COMMENT_FORCE=true` ignores it). Cricket runs from `--comments` / `/trigger-comments`.
+  Only channels in `COMMENT_AGENT_CHANNELS` (default `cricket`) run on a schedule - enable the rest one at a time.
+
+Owner workflow (repo variables set `COMMENT_AGENT_ENABLED=true`, `COMMENT_AGENT_CHANNELS=cricket`):
+
+```
+python -m comment_engine run       --channel cricket            # sync + draft
+python -m comment_engine drafts    --channel cricket            # review queue
+python -m comment_engine edit      --channel cricket --draft ID --text "..."
+python -m comment_engine approve   --channel cricket --draft ID
+python -m comment_engine publishing --channel cricket --on on   # one-time owner opt-in
+python -m comment_engine publish   --channel cricket --draft ID # or set COMMENT_AGENT_DEFAULT_MODE=publish_approved
+python -m comment_engine test      --channel cricket --text "kitne run chahiye the?"   # no DB/YouTube
+```
+
+Other commands: `feedback` (on_brand, too_generic, too_polite, too_aggressive, incorrect, irrelevant - on_brand replies become
+style examples), `metrics`, `events` (audit trail), `purge --days N`, `validate-personas`.
+
+Settings: `COMMENT_AGENT_ENABLED`, `COMMENT_AGENT_CHANNELS`, `COMMENT_AGENT_DEFAULT_MODE` (`draft`|`publish_approved`),
+`COMMENT_AGENT_MAX_COMMENTS_PER_RUN`, `COMMENT_AGENT_MAX_REGENERATION_ATTEMPTS`, `COMMENT_AGENT_DUPLICATE_WINDOW`,
+`COMMENT_AGENT_REQUIRE_APPROVAL`, `COMMENT_AGENT_SEMANTIC_CHECK`, `COMMENT_AGENT_TENANT_ID`. Bad values fail closed.
+
+Tokens must include `youtube.force-ssl`. State lives in the shared database (`comment_agent_*` tables).
+Tests: `python -m pytest tests/test_comment_agent.py -q`
 
 ## Known Limitations
 
 - Sarvam Hindi TTS currently errors on `target_language_code` and falls back to Edge TTS
 - Custom thumbnail upload is blocked by a 403 on some channels (likely requires channel phone verification)
-- The comment-reply agent needs the `youtube.force-ssl` OAuth scope (see the Comment Reply Agent section); Gaming has no comment agent yet
+- The comment agent needs the `youtube.force-ssl` OAuth scope on every channel token (see the Comment Agent section)
 - Bhakti has no tab in the Streamlit dashboard yet (its data is in the database)
 - Saturation gating is not bypassed by `FORCE_GENERATE` (only the schedule-hour gate is)
 

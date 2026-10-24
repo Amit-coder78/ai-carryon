@@ -411,6 +411,16 @@ def _run_gaming_cycle_inner(force=False):
     return {"status": "uploaded", "video_url": video_url, "title": title}
 
 
+def _comment_agent_job():
+    """Comment agent (drafts for owner review; gated by COMMENT_AGENT_* settings). Never raises."""
+    try:
+        from comment_engine.service import run_scheduled
+        run_scheduled("gaming")
+    except Exception as e:
+        print(f"Comment agent job error: {e}")
+
+
 if __name__ == "__main__":
     result = run_gaming_cycle()
     print(result)
+    _comment_agent_job()

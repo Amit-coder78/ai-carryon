@@ -361,6 +361,16 @@ def _overrides_from_args(a):
     return {k: v for k, v in o.items() if v is not None}
 
 
+def _comment_agent_job():
+    """Comment agent (drafts for owner review; gated by COMMENT_AGENT_* settings). Never raises."""
+    try:
+        from comment_engine.service import run_scheduled
+        run_scheduled("horror")
+    except Exception as e:
+        print(f"Comment agent job error: {e}")
+
+
 if __name__ == "__main__":
     args = _parse_args(sys.argv[1:])
     print(run_horror_cycle(_overrides_from_args(args), force=args.force))
+    _comment_agent_job()

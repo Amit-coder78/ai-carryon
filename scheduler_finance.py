@@ -180,5 +180,15 @@ def _run(settings, deps):
     return {"status": "uploaded", "video_url": url, "title": meta["title"]}
 
 
+def _comment_agent_job():
+    """Comment agent (drafts for owner review; gated by COMMENT_AGENT_* settings). Never raises."""
+    try:
+        from comment_engine.service import run_scheduled
+        run_scheduled("finance")
+    except Exception as e:
+        print(f"Comment agent job error: {e}")
+
+
 if __name__ == "__main__":
     print(run_finance_cycle())
+    _comment_agent_job()

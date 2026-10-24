@@ -9,7 +9,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from tests import test_comment_engine as T   # sets up a temp SQLite DB before agents.database loads
+from tests import comment_helpers as T   # sets up a temp SQLite DB before agents.database loads
 from agents import brain_client as bc
 from agents import topic_selection as ts
 from agents.database import db
@@ -279,9 +279,13 @@ class AuthorPlumbingTests(unittest.TestCase):
         T.reset_db()
 
     def test_comment_engine_stores_author_on_topic_requests(self):
-        yt = T.FakeYT([T.thread("c1", "make a video on quantum chips", author="UC_FAN")])
-        llm = T.make_llm(default=("Suggestion", "noted bro", "quantum chips explained"))
-        T.ce.process(T.spec_for(yt, llm), log_fn=lambda *_: None)
+        llm = T.FakeLLM(classify={"intent": "suggestion", "language": "english", "reply_strategy": "acknowledge",
+                                  "confidence": 0.9, "requested_topic": "quantum chips explained"},
+                        generate=[{"reply_text": "noted bro", "strategy": "acknowledge"}])
+        svc, *_ = T.make_service("english", [T.thread("c1", "make a video on quantum chips", author="UC_FAN")],
+                                 llm=llm, real_topic_sink=True)      # real sink -> agents.database.db
+        svc.sync()
+        svc.process_pending()
         rows = db.get_topic_requests("english")
         self.assertEqual([(r["topic"], r["author_channel_id"]) for r in rows], [("quantum chips explained", "UC_FAN")])
 

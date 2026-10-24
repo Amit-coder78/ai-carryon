@@ -288,12 +288,16 @@ def _run_cricket_cycle_inner():
 
 
 def run_comment_replies():
-    """Optional: process + reply to cricket-channel comments. Not wired into
-    the main cycle automatically (comment fetching costs YouTube API quota
-    on every call) — call this from a separate, less-frequent trigger, e.g.
-    a cron hitting a dedicated /trigger-comments endpoint a few times a day."""
-    from agents_cricket.comment_reply_agent import process_comments_cricket
-    return process_comments_cricket()
+    """Comment agent for the cricket channel: sync + draft for owner review. Not part of the main
+    cycle (comment fetching costs YouTube quota); trigger it from `--comments` or /trigger-comments.
+    Needs COMMENT_AGENT_ENABLED=true. Publishes only owner-approved drafts, and only if the owner
+    enabled publishing for this channel."""
+    from comment_engine.config import load_settings
+    from comment_engine.service import CommentAgentService
+    settings = load_settings()
+    if not settings.enabled:
+        return {"status": "disabled", "hint": "set COMMENT_AGENT_ENABLED=true"}
+    return CommentAgentService("cricket", settings=settings).run()
 
 
 if __name__ == "__main__":

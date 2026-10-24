@@ -15,10 +15,6 @@ on:
         description: "Run comment replies now, ignoring the 19:00-23:59 IST window"
         required: false
         default: "false"
-      comments_dry_run:
-        description: "Comment replies: draft + store only, do NOT post to YouTube"
-        required: false
-        default: "false"
 
 jobs:
   run-scheduler:
@@ -57,7 +53,9 @@ jobs:
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
           FORCE_GENERATE: ${{ github.event.inputs.force_generate || 'false' }}
           COMMENT_FORCE: ${{ github.event.inputs.force_comments || 'false' }}
-          COMMENT_AUTO_REPLY: ${{ github.event.inputs.comments_dry_run == 'true' && 'false' || 'true' }}
+          COMMENT_AGENT_ENABLED: ${{ vars.COMMENT_AGENT_ENABLED || 'false' }}
+          COMMENT_AGENT_CHANNELS: ${{ vars.COMMENT_AGENT_CHANNELS || 'cricket' }}
+          COMMENT_AGENT_DEFAULT_MODE: ${{ vars.COMMENT_AGENT_DEFAULT_MODE || 'draft' }}
         run: python scheduler_bhakti.py
 
       - name: Upload run log (for debugging)

@@ -28,6 +28,9 @@ jobs:
       - name: Run gaming scheduler
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          COMMENT_AGENT_ENABLED: ${{ vars.COMMENT_AGENT_ENABLED || 'false' }}
+          COMMENT_AGENT_CHANNELS: ${{ vars.COMMENT_AGENT_CHANNELS || 'cricket' }}
+          COMMENT_AGENT_DEFAULT_MODE: ${{ vars.COMMENT_AGENT_DEFAULT_MODE || 'draft' }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_GAMING || secrets.GROQ_API_KEY }}
           GROQ_API_KEY_SHARED: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_GAMING || secrets.GEMINI_API_KEY }}

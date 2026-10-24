@@ -368,14 +368,14 @@ def track_views_hindi_job():
 
 
 def comment_reply_job_hindi():
-    """Daily comment replies (19:00-23:59 IST, once per IST day — the gate and
-    the once-a-day bookkeeping live in agents/comment_engine.py and use the
-    shared database). Never raises."""
+    """Comment agent: draft replies for owner review (window/once-a-day gate and the
+    enable/pause switches live in comment_engine). Never raises; never publishes unless the
+    channel owner enabled publishing AND approved the draft."""
     try:
-        from agents_hindi.comment_reply_agent import run_scheduled
-        run_scheduled(log_fn=log)
+        from comment_engine.service import run_scheduled
+        run_scheduled("hindi", log=log)
     except Exception as e:
-        log(f"Comment reply job error: {e}")
+        log(f"Comment agent job error: {e}")
 
 
 def main():

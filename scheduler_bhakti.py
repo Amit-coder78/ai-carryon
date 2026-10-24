@@ -353,14 +353,14 @@ def track_views_bhakti_job():
 
 
 def comment_reply_job_bhakti():
-    """Daily comment replies (19:00-23:59 IST, once per IST day; evening aarti
-    time suits a devotional audience). Gate + bookkeeping live in
-    agents/comment_engine.py. Never raises."""
+    """Comment agent: draft replies for owner review (window/once-a-day gate and the
+    enable/pause switches live in comment_engine). Never raises; never publishes unless the
+    channel owner enabled publishing AND approved the draft."""
     try:
-        from agents_bhakti.comment_reply_agent import run_scheduled
-        run_scheduled(log_fn=log)
+        from comment_engine.service import run_scheduled
+        run_scheduled("bhakti", log=log)
     except Exception as e:
-        log(f"Comment reply job error: {e}")
+        log(f"Comment agent job error: {e}")
 
 
 def main():
