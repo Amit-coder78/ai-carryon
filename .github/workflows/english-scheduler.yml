@@ -43,6 +43,16 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      # Optional Brain topic ranking. Off unless the repository VARIABLE BRAIN_ENABLED is "true"
+      # (Settings > Secrets and variables > Actions > Variables). Starts the engine inside this job;
+      # if it fails to start the pipeline just runs without the Brain.
+      - name: Start Brain engine (optional)
+        if: ${{ vars.BRAIN_ENABLED == 'true' }}
+        continue-on-error: true
+        uses: Amit-coder78/ai-carryon-brain-platform/.github/actions/ci-engine@main
+        with:
+          channel: english
+
       - name: Run English scheduler
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -53,9 +63,6 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY_ENGLISH || secrets.PEXELS_API_KEY }}
           PEXELS_API_KEY_SHARED: ${{ secrets.PEXELS_API_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-          BRAIN_ENGINE_URL: ${{ secrets.BRAIN_ENGINE_URL }}
-          BRAIN_WORKSPACE_ID: ${{ secrets.BRAIN_WORKSPACE_ID }}
-          BRAIN_CHANNEL_ID_ENGLISH: ${{ secrets.BRAIN_CHANNEL_ID_ENGLISH }}
           YOUTUBE_TOKEN_B64: ${{ secrets.YOUTUBE_TOKEN_B64 }}
           YOUTUBE_CLIENT_SECRETS_B64: ${{ secrets.YOUTUBE_CLIENT_SECRETS_B64 }}
           YOUTUBE_ANALYTICS_TOKEN_B64: ${{ secrets.YOUTUBE_ANALYTICS_TOKEN_B64 }}
