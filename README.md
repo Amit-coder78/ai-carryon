@@ -1,12 +1,50 @@
-# AI CarryON — Autonomous Multi-Channel YouTube Shorts Platform
+<div align="center">
 
-An autonomous AI system that discovers trending topics, researches them, writes scripts, generates voiceovers, renders Shorts, writes SEO metadata, and uploads to YouTube with no human in the loop. It then tracks how each video performs and feeds that data back into what it makes next.
+# AI CarryON
 
-It runs **five independent production channels**, each with its own content source, audience, credentials, and schedule, all deployed as scheduled GitHub Actions workflows.
+### Autonomous multi-channel YouTube Shorts platform
 
-**Dashboard**: <https://ai-carryon-tqndlmjbcfvtznagmef2ap.streamlit.app/Dashboard>
-**Repo**: <https://github.com/Unknown183-a/ai-carryon>
-**Channels**: [English](https://www.youtube.com/@AIcarryONAI) · [Hindi](https://www.youtube.com/@AICarryONHindi) · [Cricket](https://www.youtube.com/@AICarryONSports) · [Gaming](https://www.youtube.com/@AICarryONGaming)
+Finds trending topics, researches them, writes scripts, produces voiceovers, renders videos, and uploads to YouTube with no human in the loop, then learns from how each video performs.
+
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-scheduled%20pipelines-2088FF?logo=githubactions&logoColor=white)
+![Postgres](https://img.shields.io/badge/Supabase-Postgres-3ECF8E?logo=supabase&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-dashboard-FF4B4B?logo=streamlit&logoColor=white)
+![LLM](https://img.shields.io/badge/LLM-Groq%20%2B%20Gemini-8A2BE2)
+
+[Live dashboard](https://ai-carryon-tqndlmjbcfvtznagmef2ap.streamlit.app/Dashboard) |
+[Brain Platform backend](https://github.com/Amit-coder78/ai-carryon-brain-platform) |
+[Backend architecture](https://htmlpreview.github.io/?https://github.com/Amit-coder78/ai-carryon-brain-platform/blob/main/docs/architecture/index.html)
+
+</div>
+
+---
+
+## Overview
+
+AI CarryON runs **seven independent pipelines**, each with its own content source, audience, credentials, and schedule, all deployed as scheduled GitHub Actions workflows at zero hosting cost. Five are documented here as production channels; Finance and Horror have their own docs ([`FINANCE.md`](FINANCE.md), [`HORROR.md`](HORROR.md)).
+
+| | |
+| --- | --- |
+| **Compute** | GitHub Actions cron workflows (stateless runs) |
+| **State** | Supabase Postgres, partitioned per channel |
+| **LLMs** | Groq `openai/gpt-oss-120b` primary, Gemini fallback, with circuit breakers and call budgets |
+| **Decision backend** | [ai-carryon-brain-platform](https://github.com/Amit-coder78/ai-carryon-brain-platform): versioned "Brains" that rank candidate topics |
+| **Voice** | Edge TTS, Sarvam AI (Hindi) |
+| **Media** | Pexels and Twitch clips, ffmpeg rendering |
+| **Dashboard** | Streamlit, reading the same Postgres database |
+| **Channels** | [English](https://www.youtube.com/@AIcarryONAI) / [Hindi](https://www.youtube.com/@AICarryONHindi) / [Cricket](https://www.youtube.com/@AICarryONSports) / [Gaming](https://www.youtube.com/@AICarryONGaming) |
+
+### Highlights
+
+- **Fully autonomous**: topic discovery to YouTube upload, with learned peak-hour scheduling.
+- **Self-improving**: velocity tracking, saturation scoring, competitor benchmarking, and A/B title testing feed back into every run.
+- **Resilient by design**: provider fallback, per-channel API key isolation, resumable runs, and a backend that can never block a video if it fails.
+- **Zero-cost infrastructure**: migrated off paid hosting to scheduled workflows plus Postgres.
+
+## Contents
+
+[Channels](#channels-in-production) | [Pipeline](#what-each-pipeline-does) | [Architecture](#architecture) | [Brain Platform backend](#brain-platform-backend) | [Intelligence layer](#intelligence-layer-english-hindi-and-bhakti) | [Engineering highlights](#engineering-highlights) | [Local setup](#local-setup) | [Deployment](#deployment) | [Operational notes](#operational-notes) | [Hook engine](#hook-engine) | [Comment replies](#comment-reply-agent) | [Limitations](#known-limitations) | [Roadmap](#roadmap)
 
 ---
 
@@ -45,15 +83,20 @@ Every channel runs on its own schedule and, without human input:
 
 ### Pipeline (per channel)
 
-```
-Adaptive Hour Check -> Trending Topic (niche-filtered)
-    -> Saturation Check -> Competitor Comparison
-    -> Research (LLM) -> Script
-    -> A/B Title Test -> SEO
-    -> Voiceover -> Captions
-    -> Background footage (Pexels clips / Twitch clips)
-    -> Video render (ffmpeg) -> YouTube upload
-    -> View snapshots -> Postgres (channel-tagged)
+```mermaid
+flowchart TD
+    A["Adaptive hour check"] --> B["Trending topic (niche-filtered)"]
+    B --> BR["Brain ranking<br/>(optional, English)"]
+    BR --> C["Saturation check"]
+    C --> D["Competitor comparison"]
+    D --> E["Research (LLM) and script"]
+    E --> F["A/B title test and SEO"]
+    F --> G["Voiceover and captions"]
+    G --> H["Background footage<br/>(Pexels / Twitch clips)"]
+    H --> I["Render (ffmpeg)"]
+    I --> J["YouTube upload"]
+    J --> K["View snapshots to Postgres"]
+    K -. "learning loop" .-> A
 ```
 
 ---
@@ -72,18 +115,78 @@ Adaptive Hour Check -> Trending Topic (niche-filtered)
 
 ### Repository Layout
 
+| Path | Contents |
+| --- | --- |
+| `agents/` | English pipeline agents and shared video, voice and caption agents (includes `brain_client.py` and `topic_selection.py`, the Brain platform client) |
+| `agents_hindi/` | Hindi (Hinglish) pipeline agents |
+| `agents_cricket/` | Cricket pipeline agents |
+| `agents_gaming/` | Gaming pipeline agents (Twitch client, clip finder, etc.) |
+| `agents_bhakti/` | Bhakti (Hindi devotional) pipeline agents |
+| `tests/` | Offline tests (comment engine, Brain topic selection, and more) |
+| `pages/` | Streamlit dashboard pages |
+| `scheduler*.py` | One scheduler per channel: `scheduler.py`, `scheduler_hindi.py`, `scheduler_cricket.py`, `scheduler_gaming.py`, `scheduler_bhakti.py` |
+| `app.py` | Streamlit entrypoint |
+| `.github/workflows/` | English, Hindi, Cricket, Gaming and Bhakti scheduler workflows |
+
+---
+
+## Brain Platform backend
+
+AI CarryON uses a separate repository, [**ai-carryon-brain-platform**](https://github.com/Amit-coder78/ai-carryon-brain-platform), as its **decision-making backend**. This repo (the pipeline) is the *client*; the Brain platform is the *service* that ranks candidate topics before a video is made.
+
+**Architecture of the backend:** [open the interactive diagram](https://htmlpreview.github.io/?https://github.com/Amit-coder78/ai-carryon-brain-platform/blob/main/docs/architecture/index.html)
+
+```mermaid
+flowchart LR
+    subgraph C["ai-carryon (pipeline)"]
+        S["scheduler.py"] --> T["topic_selection.py"] --> B["brain_client.py"]
+    end
+    subgraph P["ai-carryon-brain-platform (backend)"]
+        E["Engine (FastAPI)<br/>/v1/runtime/execute<br/>rank + fuse (rrf-v1)"]
+        R["Registry API + Postgres<br/>Brains, versions, decisions"]
+        E --- R
+    end
+    B -- "candidates" --> E
+    E -- "ranked list" --> B
 ```
-agents/            English pipeline agents + shared video/voice/caption agents
-agents_hindi/      Hindi (Hinglish) pipeline agents
-agents_cricket/    Cricket pipeline agents
-agents_gaming/     Gaming pipeline agents (Twitch client, clip finder, etc.)
-agents_bhakti/     Bhakti (Hindi devotional) pipeline agents
-tests/             Offline tests (comment engine)
-pages/             Streamlit dashboard pages
-scheduler.py, scheduler_hindi.py, scheduler_cricket.py, scheduler_gaming.py, scheduler_bhakti.py
-app.py             Streamlit entrypoint
-.github/workflows/ english / hindi / cricket / gaming / bhakti scheduler workflows
-```
+
+### How the two repos connect
+
+| Piece | Location |
+| --- | --- |
+| HTTP client for the engine | [`agents/brain_client.py`](agents/brain_client.py) |
+| Topic choice using the ranking | [`agents/topic_selection.py`](agents/topic_selection.py), called from `scheduler.py` |
+| Engine started inside the CI job | `.github/workflows/english-scheduler.yml` uses `Amit-coder78/ai-carryon-brain-platform/.github/actions/ci-engine@main` |
+| API contract both sides follow | [`contracts/openapi.yaml`](https://github.com/Amit-coder78/ai-carryon-brain-platform/blob/main/contracts/openapi.yaml) in the Brain platform repo |
+
+### What the Brain does for the pipeline
+
+1. The scheduler builds a shortlist of trending topics (topics posted in the last 24h are dropped first).
+2. It sends them to `POST /v1/runtime/execute` with signals per topic: freshness (`days_since_trend`) and viewer demand from `topic_requests` over 30 days (`unique_requesters` = distinct commenters via `author_channel_id`).
+3. The engine runs the channel's attached Brains, fuses their rankings, and returns the order plus a `decision_id`.
+4. The pipeline tries topics in Brain order; each must still pass the saturation check.
+5. Every Brain-assisted decision logs one `BRAIN_LOG {...}` line (source, execution id, policy version, Brain versions).
+
+### Safe by default
+
+**Off unless configured; with nothing set there is no extra network call and behaviour is unchanged.** Any failure, a `baseline_fallback`, or a ranking with no preference (`no_signal`) falls back to the original selection. A Brain problem can never fail a video run.
+
+### Enabling it (English channel)
+
+Add a GitHub repository **variable** `BRAIN_ENABLED` = `true` (Settings > Secrets and variables > Actions > Variables). The English workflow then starts the engine inside the job, so there is nothing to host. Remove the variable (or set it to anything else) to switch it off. If the engine fails to start, the run continues without the Brain.
+
+To use a separately hosted engine instead, leave `BRAIN_ENABLED` unset and set these yourself:
+
+| Variable | Purpose |
+| --- | --- |
+| `BRAIN_ENGINE_URL` | Engine base URL, reachable from the runner |
+| `BRAIN_WORKSPACE_ID` | Workspace uuid in the Brain registry (sent as `x-workspace-id`) |
+| `BRAIN_CHANNEL_ID_ENGLISH` | Registry channel uuid (`BRAIN_CHANNEL_ID_<CHANNEL>` for others) |
+| `BRAIN_ENABLED=0` | Kill switch in the environment |
+
+Cost when enabled: one extra YouTube search call per run. Other channels can adopt it with `brain_ranked_topic("<channel>")` and `BRAIN_CHANNEL_ID_<CHANNEL>`.
+
+Tests (offline): `python -m unittest tests.test_brain_topic_selection -v`
 
 ---
 
@@ -114,7 +217,7 @@ app.py             Streamlit entrypoint
 
 ## Local Setup
 
-```
+```bash
 git clone https://github.com/Unknown183-a/ai-carryon.git
 cd ai-carryon
 python3 -m venv .venv
@@ -196,7 +299,7 @@ their scheduler once per IST day (any time 19:00-23:59 IST, tracked in the DB so
 counts); Cricket runs it from its own `14:00 UTC` cron (`--comments`).
 
 - One LLM call per comment returns category + reply + topic. Spam/Offensive are never answered.
-- Bhakti has a devotional voice: it mirrors greetings ("Jai Shree Ram" gets "Jai Shree Ram 🙏"), never jokes about deities, never promises miracles, and never answers religious arguments (`Religious Debate` is skipped like Spam).
+- Bhakti has a devotional voice: it mirrors greetings ("Jai Shree Ram" gets the same greeting back), never jokes about deities, never promises miracles, and never answers religious arguments (`Religious Debate` is skipped like Spam).
 - State lives in the database (`comment_history`, `topic_requests`; cricket: `cricket_comment_history`,
   `cricket_match_requests`), not `output/*.json`, which Actions wipes every run.
 - A comment is only finished once the reply is posted, deliberately skipped, or failed permanently. LLM/API
@@ -226,27 +329,22 @@ counts); Cricket runs it from its own `14:00 UTC` cron (`--comments`).
 - **Extend the intelligence layer to Cricket and Gaming**: saturation, comparison, and adaptive scheduling currently run for English and Hindi only.
 - **Failure and hook analysis**: systematic tracking of why videos underperform.
 - **Audience, opportunity, and monetization intelligence**: demographic pulls, pre-trend prediction, and RPM-correlated topic scoring.
-- **Centralized "brain" service**: deliberately deferred until the pipeline stabilized. With five channels now running the same pattern, it is the natural next abstraction.
+- **Centralized "brain" service**: built as [ai-carryon-brain-platform](https://github.com/Amit-coder78/ai-carryon-brain-platform) and live for English topic ranking (see [Brain Platform backend](#brain-platform-backend)). Next: roll it out to the other channels.
 - **Multi-tenant SaaS rebuild**: a from-scratch rebuild of this pipeline as a multi-tenant platform (FastAPI, Firebase, Celery workers on Cloud Run) lives in [ai-carryon-saas](https://github.com/Unknown183-a/ai-carryon-saas).
 
 ---
 
-*AI CarryON — Built by Amit Kumar*
+## Additional pipelines
 
-## AI CarryON Horror
-A further pipeline (original English horror Shorts / long-form). See [HORROR.md](HORROR.md).
+| Pipeline | Description | Docs |
+| --- | --- | --- |
+| **Finance** | Stock-market and finance education Shorts with a fact-check gate on every script | [`FINANCE.md`](FINANCE.md) |
+| **Horror** | Original English horror stories (clearly labelled fiction), Shorts or long-form | [`HORROR.md`](HORROR.md) |
 
-## Brain platform topic ranking (optional, English channel)
+---
 
-`scheduler.py` can ask the Brain engine (`ai-carryon-brain-platform`, `POST /v1/runtime/execute`) to rank the trending shortlist before choosing a topic. **Off unless configured; with nothing set there is no extra network call and behaviour is unchanged.**
+<div align="center">
 
-Enable it with one setting: add a GitHub repository **variable** `BRAIN_ENABLED` = `true` (Settings > Secrets and variables > Actions > Variables). The English workflow then starts the engine inside the job (see `ai-carryon-brain-platform/.github/actions/ci-engine`), so there is nothing to host. Remove the variable (or set it to anything else) to switch it off. If the engine fails to start, the run continues without the Brain.
+**AI CarryON** | Built by Amit Kumar
 
-To use a separately hosted engine instead, set `BRAIN_ENGINE_URL`, `BRAIN_WORKSPACE_ID` and `BRAIN_CHANNEL_ID_ENGLISH` yourself and leave `BRAIN_ENABLED` unset. Kill switch: `BRAIN_ENABLED=0` in the environment.
-
-- Topics posted in the last 24h are dropped before ranking; each ranked topic must still pass the saturation check, in Brain order.
-- Signals sent per candidate: freshness (`days_since_trend`), and viewer demand from `topic_requests` over 30 days (`unique_requesters` counts distinct commenters via the new `author_channel_id` column; older rows without an author never count as a person).
-- Any failure, `baseline_fallback`, or a ranking with no preference (`no_signal`) falls back to the original selection. Every Brain-assisted decision logs one `BRAIN_LOG {...}` line (source, execution id, policy version, Brain versions).
-- Costs one extra YouTube search call per run when enabled. Other channels can adopt it with `brain_ranked_topic("<channel>")` and `BRAIN_CHANNEL_ID_<CHANNEL>`.
-
-Tests: `python -m unittest tests.test_brain_topic_selection -v` (offline).
+</div>
