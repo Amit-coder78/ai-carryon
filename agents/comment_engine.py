@@ -421,9 +421,10 @@ class DbStore:
         except Exception as e:
             print(f"[comment_engine:{self.channel}] history save failed: {e}")
 
-    def save_topic(self, topic, comment, video_id):
+    def save_topic(self, topic, comment, video_id, author_channel_id=None):
         try:
-            self._db().save_topic_request(self.channel, topic, comment, video_id)
+            self._db().save_topic_request(self.channel, topic, comment, video_id,
+                                          author_channel_id=author_channel_id)
         except Exception as e:
             print(f"[comment_engine:{self.channel}] topic save failed: {e}")
 
@@ -456,7 +457,7 @@ class CricketStore:
         except Exception as e:
             print(f"[comment_engine:cricket] history save failed: {e}")
 
-    def save_topic(self, topic, comment, video_id):
+    def save_topic(self, topic, comment, video_id, author_channel_id=None):
         try:
             self._db().save_match_request(request_text=topic, comment=comment, video_id=video_id)
         except Exception as e:
@@ -520,6 +521,7 @@ def fetch_new_comments(spec, youtube, channel_id, max_results=50):
                 "comment_id": cid,
                 "video_id": tsn.get("videoId", "") or thread.get("videoId", ""),
                 "username": tsn.get("authorDisplayName", "unknown"),
+                "author_channel_id": author_channel,
                 "text": text,
                 "attempts": int((state or {}).get("attempts") or 0),
             })
@@ -688,7 +690,7 @@ def _handle_comment(spec, youtube, c, auto, stats, log_fn, tag):
 
 def _maybe_save_topic(spec, category, topic, c, stats):
     if topic and category == spec.profile["request_category"]:
-        spec.store.save_topic(topic, c["text"], c["video_id"])
+        spec.store.save_topic(topic, c["text"], c["video_id"], author_channel_id=c.get("author_channel_id"))
         stats["topic_requests"] += 1
 
 

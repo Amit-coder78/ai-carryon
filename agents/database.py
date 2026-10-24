@@ -209,7 +209,8 @@ class Database:
                     topic       TEXT,
                     comment     TEXT,
                     video_id    TEXT,
-                    timestamp   TEXT
+                    timestamp   TEXT,
+                    author_channel_id TEXT
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_comment_history_channel
@@ -225,6 +226,22 @@ class Database:
                     ON posted_topics(channel, posted_at);
             """)
         self._migrate_ab_title_tests_columns()
+        self._migrate_topic_requests_columns()
+
+    def _migrate_topic_requests_columns(self):
+        """Adds topic_requests.author_channel_id to older databases (nullable; old rows stay NULL,
+        which the Brain demand signal treats as 'unknown person', never as a distinct requester)."""
+        with self._conn() as conn:
+            if USE_POSTGRES:
+                rows = conn.execute("""
+                    SELECT column_name AS name FROM information_schema.columns
+                    WHERE table_name = 'topic_requests'
+                """).fetchall()
+            else:
+                rows = conn.execute("PRAGMA table_info(topic_requests)").fetchall()
+            if "author_channel_id" not in [row["name"] for row in rows]:
+                conn.execute("ALTER TABLE topic_requests ADD COLUMN author_channel_id TEXT")
+                print("Migrated topic_requests: added column author_channel_id")
 
     def _migrate_ab_title_tests_columns(self):
         """
@@ -771,13 +788,13 @@ class Database:
         with self._conn() as conn:
             return [dict(r) for r in conn.execute(query, tuple(params)).fetchall()]
 
-    def save_topic_request(self, channel, topic, comment, video_id):
+    def save_topic_request(self, channel, topic, comment, video_id, author_channel_id=None):
         now = datetime.now(timezone.utc).isoformat()
         with self._conn() as conn:
             conn.execute("""
-                INSERT INTO topic_requests (channel, topic, comment, video_id, timestamp)
-                VALUES (?, ?, ?, ?, ?)
-            """, (channel, topic, comment, video_id, now))
+                INSERT INTO topic_requests (channel, topic, comment, video_id, timestamp, author_channel_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (channel, topic, comment, video_id, now, author_channel_id))
 
     def get_topic_requests(self, channel=None, limit=100):
         query = "SELECT * FROM topic_requests"

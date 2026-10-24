@@ -66,6 +66,14 @@ def get_fresh_trending_topic(region_code="US", max_attempts=5):
 
     recent_topics = get_recent_topics(hours=24)
 
+    # Brain platform ranking (off unless BRAIN_ENGINE_URL etc. are set). Returns None for every
+    # non-happy path, in which case the original selection below runs exactly as before.
+    from agents.topic_selection import brain_ranked_topic
+    brain_topic = brain_ranked_topic("english", region_code, recent_topics=recent_topics,
+                                     max_attempts=max_attempts, log=log)
+    if brain_topic:
+        return brain_topic
+
     for attempt in range(max_attempts):
         topic = get_trending_topic(region_code=region_code)
 
