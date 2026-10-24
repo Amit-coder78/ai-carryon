@@ -144,8 +144,8 @@ def _load_uploaded_titles():
 # Fetch: recent search (primary) + mostPopular chart (fallback)
 # ─────────────────────────────────────────────
 
-def _fetch_recent_search(youtube, region_code, hours=96, max_results=50):
-    """Genuinely fresh videos from the last N hours, sorted by view count."""
+def _fetch_recent_search_items(youtube, region_code, hours=96, max_results=50):
+    """Genuinely fresh videos from the last N hours, sorted by view count, as (title, publishedAt)."""
     published_after = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
@@ -159,10 +159,16 @@ def _fetch_recent_search(youtube, region_code, hours=96, max_results=50):
             videoCategoryId="28",
             maxResults=max_results,
         ).execute()
-        return [item["snippet"]["title"] for item in search_resp.get("items", [])]
+        return [(item["snippet"]["title"], item["snippet"].get("publishedAt"))
+                for item in search_resp.get("items", [])]
     except Exception as e:
         print(f"Trending agent recent-search error: {e}")
         return []
+
+
+def _fetch_recent_search(youtube, region_code, hours=96, max_results=50):
+    """Genuinely fresh videos from the last N hours, sorted by view count."""
+    return [t for t, _ in _fetch_recent_search_items(youtube, region_code, hours, max_results)]
 
 
 def _fetch_most_popular(youtube, region_code, max_results=50):
@@ -239,6 +245,37 @@ def get_trending_topic(region_code="US"):
     chosen = _fallback_topic()
     _save_recent(chosen)
     return chosen
+
+
+def _age_days(published_iso):
+    try:
+        published = datetime.fromisoformat(published_iso.replace("Z", "+00:00"))
+        return max((datetime.now(timezone.utc) - published).total_seconds() / 86400.0, 0.0)
+    except Exception:
+        return None
+
+
+def get_trending_candidates(region_code="US", limit=20):
+    """The same filtered shortlist get_trending_topic() draws its random pick from, as
+    [{"title", "age_days"}], with NO side effects (nothing is marked as used). Returns []
+    on any failure; callers then use get_trending_topic() as before."""
+    try:
+        youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+        recent_used = _load_recent() + _load_uploaded_titles()
+        items = _fetch_recent_search_items(youtube, region_code, hours=96)
+        out = []
+        for title, published in items:
+            if all(ord(c) < 128 for c in title) and is_tech_topic(title) and not _is_repeat(title, recent_used):
+                out.append({"title": title, "age_days": _age_days(published) if published else None})
+        return out[:limit]
+    except Exception as e:
+        print(f"Trending agent candidates error: {e}")
+        return []
+
+
+def mark_topic_used(title):
+    """Record a chosen topic the way get_trending_topic() does, so it isn't picked again."""
+    _save_recent(title)
 
 
 def _generate_dynamic_topic(recent_used, attempts=3):

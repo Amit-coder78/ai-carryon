@@ -235,3 +235,16 @@ counts); Cricket runs it from its own `14:00 UTC` cron (`--comments`).
 
 ## AI CarryON Horror
 A further pipeline (original English horror Shorts / long-form). See [HORROR.md](HORROR.md).
+
+## Brain platform topic ranking (optional, English channel)
+
+`scheduler.py` can ask the Brain engine (`ai-carryon-brain-platform`, `POST /v1/runtime/execute`) to rank the trending shortlist before choosing a topic. **Off unless configured; with nothing set there is no extra network call and behaviour is unchanged.**
+
+Enable by adding these GitHub secrets (the English workflow already passes them through): `BRAIN_ENGINE_URL` (must be reachable from GitHub runners), `BRAIN_WORKSPACE_ID`, `BRAIN_CHANNEL_ID_ENGLISH` (uuids from the Brain registry; the channel needs an active attached Brain). Kill switch: `BRAIN_ENABLED=0`.
+
+- Topics posted in the last 24h are dropped before ranking; each ranked topic must still pass the saturation check, in Brain order.
+- Signals sent per candidate: freshness (`days_since_trend`), and viewer demand from `topic_requests` over 30 days (`unique_requesters` counts distinct commenters via the new `author_channel_id` column; older rows without an author never count as a person).
+- Any failure, `baseline_fallback`, or a ranking with no preference (`no_signal`) falls back to the original selection. Every Brain-assisted decision logs one `BRAIN_LOG {...}` line (source, execution id, policy version, Brain versions).
+- Costs one extra YouTube search call per run when enabled. Other channels can adopt it with `brain_ranked_topic("<channel>")` and `BRAIN_CHANNEL_ID_<CHANNEL>`.
+
+Tests: `python -m unittest tests.test_brain_topic_selection -v` (offline).

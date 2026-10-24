@@ -53,6 +53,9 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY_ENGLISH || secrets.PEXELS_API_KEY }}
           PEXELS_API_KEY_SHARED: ${{ secrets.PEXELS_API_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          BRAIN_ENGINE_URL: ${{ secrets.BRAIN_ENGINE_URL }}
+          BRAIN_WORKSPACE_ID: ${{ secrets.BRAIN_WORKSPACE_ID }}
+          BRAIN_CHANNEL_ID_ENGLISH: ${{ secrets.BRAIN_CHANNEL_ID_ENGLISH }}
           YOUTUBE_TOKEN_B64: ${{ secrets.YOUTUBE_TOKEN_B64 }}
           YOUTUBE_CLIENT_SECRETS_B64: ${{ secrets.YOUTUBE_CLIENT_SECRETS_B64 }}
           YOUTUBE_ANALYTICS_TOKEN_B64: ${{ secrets.YOUTUBE_ANALYTICS_TOKEN_B64 }}
