@@ -6,11 +6,11 @@
 
 Finds trending topics, researches them, writes scripts, produces voiceovers, renders videos, and uploads to YouTube with no human in the loop, then learns from how each video performs.
 
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
-![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-scheduled%20pipelines-2088FF?logo=githubactions&logoColor=white)
-![Postgres](https://img.shields.io/badge/Supabase-Postgres-3ECF8E?logo=supabase&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-dashboard-FF4B4B?logo=streamlit&logoColor=white)
-![LLM](https://img.shields.io/badge/LLM-Groq%20%2B%20Gemini-8A2BE2)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](runtime.txt)
+[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-scheduled%20pipelines-2088FF?logo=githubactions&logoColor=white)](.github/workflows)
+[![Postgres](https://img.shields.io/badge/Supabase-Postgres-3ECF8E?logo=supabase&logoColor=white)](#architecture)
+[![Streamlit](https://img.shields.io/badge/Streamlit-dashboard-FF4B4B?logo=streamlit&logoColor=white)](https://ai-carryon-tqndlmjbcfvtznagmef2ap.streamlit.app/Dashboard)
+[![LLM](https://img.shields.io/badge/LLM-Groq%20%2B%20Gemini-8A2BE2)](#architecture)
 
 [Live dashboard](https://ai-carryon-tqndlmjbcfvtznagmef2ap.streamlit.app/Dashboard) |
 [Brain Platform backend](https://github.com/Amit-coder78/ai-carryon-brain-platform) |
